@@ -1,37 +1,20 @@
 {
-  "name": "multica",
-  "version": "0.2.0",
+  "name": "os-manager",
+  "version": "1.0.0",
+  "description": "操作系统智能代理 - AI Hackathon 2026",
   "private": true,
-  "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev:web": "turbo dev --filter=@multica/web",
-    "dev:desktop": "turbo dev --filter=@multica/desktop",
-    "build": "turbo build",
-    "typecheck": "turbo typecheck",
-    "test": "turbo test",
-    "lint": "turbo lint",
-    "clean": "turbo clean && rm -rf node_modules",
-    "ui:add": "cd packages/ui && npx shadcn@latest add"
-  },
-  "packageManager": "pnpm@10.28.2",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "electron"
-    ],
-    "overrides": {
-      "@types/react": "catalog:",
-      "@types/react-dom": "catalog:"
-    }
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "start": "cd backend && npm start"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@types/node": "catalog:",
-    "@types/pg": "^8.20.0",
-    "dotenv": "^17.4.1",
-    "pg": "^8.20.0",
-    "turbo": "^2.5.4",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "concurrently": "^8.2.2"
   }
 }
