@@ -148,6 +148,7 @@ export class AgentCore {
 4. 绝不执行可能导致系统不可用的危险命令
 5. 用中文回复用户，解释执行了什么操作以及结果含义
 6. 如果用户请求使用了 skill 相关内容，请参考下方的 skill 知识
+7. 当你已经获得工具执行结果后，请直接根据结果生成最终回复给用户，不要再发起新的工具调用
 
 回复格式：
 - 先简要说明获取了什么信息
@@ -159,6 +160,87 @@ export class AgentCore {
     }
 
     return prompt;
+  }
+
+  private extractToolCalls(assistantMessage: any): Array<{id: string; name: string; arguments: Record<string, any>}> {
+    const toolCallsToExecute: Array<{id: string; name: string; arguments: Record<string, any>}> = [];
+
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      for (const tc of assistantMessage.tool_calls) {
+        try {
+          toolCallsToExecute.push({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: JSON.parse(tc.function.arguments),
+          });
+        } catch {
+          toolCallsToExecute.push({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: {},
+          });
+        }
+      }
+    } else if (assistantMessage.content) {
+      const dsmlCalls = parseDSMLFunctionCalls(assistantMessage.content);
+      if (dsmlCalls) {
+        for (let idx = 0; idx < dsmlCalls.length; idx++) {
+          toolCallsToExecute.push({
+            id: `dsml_${idx}`,
+            name: dsmlCalls[idx].name,
+            arguments: dsmlCalls[idx].arguments,
+          });
+        }
+      }
+    }
+
+    return toolCallsToExecute;
+  }
+
+  private async executeToolCalls(
+    toolCallsToExecute: Array<{id: string; name: string; arguments: Record<string, any>}>,
+    onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>
+  ): Promise<{toolResults: ToolResult[]; riskAssessments: RiskAssessment[]; shouldExecute: boolean}> {
+    const toolResults: ToolResult[] = [];
+    const riskAssessments: RiskAssessment[] = [];
+    let shouldExecute = true;
+
+    for (const toolCall of toolCallsToExecute) {
+      const tool = this.toolRegistry.get(toolCall.name);
+
+      if (tool) {
+        const command = toolCall.arguments.command || '';
+        if (command) {
+          const risk = this.riskEngine.assess(command);
+          riskAssessments.push(risk);
+
+          if (risk.level === 'danger') {
+            shouldExecute = false;
+          } else if (risk.level === 'warning' && onRiskConfirm) {
+            const confirmed = await onRiskConfirm(risk);
+            if (!confirmed) {
+              shouldExecute = false;
+            }
+          }
+        }
+
+        if (shouldExecute) {
+          try {
+            const result = await tool.handler(toolCall.arguments);
+            toolResults.push(result);
+            console.log(`工具 ${toolCall.name} 执行结果:`, result.success ? '成功' : '失败');
+          } catch (e: any) {
+            toolResults.push({ success: false, output: '', error: e.message });
+          }
+        } else {
+          toolResults.push({ success: false, output: '', error: '操作被阻止' });
+        }
+      } else {
+        toolResults.push({ success: false, output: '', error: `未知工具: ${toolCall.name}` });
+      }
+    }
+
+    return { toolResults, riskAssessments, shouldExecute };
   }
 
   async processMessage(
@@ -180,174 +262,109 @@ export class AgentCore {
     this.sessionManager.addMessage(sessionId, userMessage);
 
     const systemPrompt = this.buildSystemPrompt(userInput);
-    const messages = this.buildMessages(session, systemPrompt);
+    let messages = this.buildMessages(session, systemPrompt);
     
-    const response = await this.openai.chat.completions.create({
-      model: config.deepseek.model,
-      messages,
-      tools: this.toolRegistry.getOpenAIFunctions(),
-      tool_choice: 'auto',
-      temperature: 0.3,
-    });
+    const maxRounds = 10;
+    let lastRiskLevel: string = 'safe';
 
-    const assistantMessage = response.choices[0].message;
-    const rawContent = assistantMessage.content || '';
-    
-    console.log('AI第一轮回复:', rawContent.substring(0, 200));
-    console.log('tool_calls存在?', !!assistantMessage.tool_calls);
-
-    let toolCallsToExecute: Array<{
-      id: string;
-      name: string;
-      arguments: Record<string, any>;
-    }> = [];
-
-    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-      toolCallsToExecute = assistantMessage.tool_calls.map(tc => ({
-        id: tc.id,
-        name: tc.function.name,
-        arguments: JSON.parse(tc.function.arguments),
-      }));
-    } else {
-      const dsmlCalls = parseDSMLFunctionCalls(rawContent);
-      if (dsmlCalls) {
-        toolCallsToExecute = dsmlCalls.map((call, idx) => ({
-          id: `dsml_${idx}`,
-          name: call.name,
-          arguments: call.arguments,
-        }));
-      }
-    }
-
-    if (toolCallsToExecute.length > 0) {
-      const toolResults: ToolResult[] = [];
-      const riskAssessments: RiskAssessment[] = [];
-      let shouldExecute = true;
-
-      for (const toolCall of toolCallsToExecute) {
-        const tool = this.toolRegistry.get(toolCall.name);
-
-        if (tool) {
-          const command = toolCall.arguments.command || '';
-          if (command) {
-            const risk = this.riskEngine.assess(command);
-            riskAssessments.push(risk);
-
-            if (risk.level === 'danger') {
-              shouldExecute = false;
-            } else if (risk.level === 'warning' && onRiskConfirm) {
-              const confirmed = await onRiskConfirm(risk);
-              if (!confirmed) {
-                shouldExecute = false;
-              }
-            }
-          }
-
-          if (shouldExecute) {
-            try {
-              const result = await tool.handler(toolCall.arguments);
-              toolResults.push(result);
-              console.log(`工具 ${toolCall.name} 执行结果:`, result.success ? '成功' : '失败');
-            } catch (e: any) {
-              toolResults.push({ success: false, output: '', error: e.message });
-            }
-          } else {
-            toolResults.push({ success: false, output: '', error: '操作被阻止' });
-          }
-        } else {
-          toolResults.push({ success: false, output: '', error: `未知工具: ${toolCall.name}` });
-        }
-      }
-
-      const finalMessages: any[] = [
-        ...messages,
-      ];
-
-      if (assistantMessage.tool_calls) {
-        finalMessages.push({
-          role: 'assistant',
-          content: rawContent,
-          tool_calls: assistantMessage.tool_calls,
-        });
-      } else {
-        finalMessages.push({
-          role: 'assistant',
-          content: rawContent,
-        });
-      }
-
-      for (let i = 0; i < toolCallsToExecute.length; i++) {
-        const tc = toolCallsToExecute[i];
-        const result = toolResults[i];
-        finalMessages.push({
-          role: 'tool',
-          tool_call_id: tc.id,
-          content: result.success 
-            ? (result.output || '执行成功')
-            : (result.error || '执行失败'),
-        });
-      }
-
-      console.log('发送第二轮请求，消息数:', finalMessages.length);
-
-      const finalResponse = await this.openai.chat.completions.create({
+    for (let round = 0; round < maxRounds; round++) {
+      console.log(`=== AI 第${round + 1}轮请求 ===`);
+      
+      const response = await this.openai.chat.completions.create({
         model: config.deepseek.model,
-        messages: finalMessages,
+        messages,
+        tools: this.toolRegistry.getOpenAIFunctions(),
+        tool_choice: 'auto',
         temperature: 0.3,
       });
 
-      const finalContent = finalResponse.choices[0].message.content || '';
-      console.log('AI第二轮回复:', finalContent.substring(0, 200));
+      const assistantMessage = response.choices[0].message;
+      const rawContent = assistantMessage.content || '';
       
-      const assistantMsg: Message = {
-        id: uuidv4(),
-        role: 'assistant',
-        content: finalContent,
-        type: shouldExecute ? 'text' : 'risk',
-        riskLevel: riskAssessments[0]?.level || 'safe',
-        timestamp: Date.now(),
-      };
-      this.sessionManager.addMessage(sessionId, assistantMsg);
+      console.log('AI回复前200字:', rawContent.substring(0, 200));
+      console.log('tool_calls存在?', !!(assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0));
 
-      return [userMessage, assistantMsg];
-    } else {
+      const toolCallsToExecute = this.extractToolCalls(assistantMessage);
+
+      if (toolCallsToExecute.length > 0) {
+        // 执行工具调用
+        const { toolResults, riskAssessments, shouldExecute } = await this.executeToolCalls(toolCallsToExecute, onRiskConfirm);
+        lastRiskLevel = riskAssessments[0]?.level || 'safe';
+
+        // 构建下一轮消息
+        if (assistantMessage.tool_calls) {
+          messages.push({
+            role: 'assistant',
+            content: rawContent,
+            tool_calls: assistantMessage.tool_calls,
+          });
+        } else {
+          messages.push({
+            role: 'assistant',
+            content: rawContent,
+          });
+        }
+
+        for (let i = 0; i < toolCallsToExecute.length; i++) {
+          const tc = toolCallsToExecute[i];
+          const result = toolResults[i];
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: result.success 
+              ? (result.output || '执行成功')
+              : (result.error || '执行失败'),
+          });
+        }
+
+        console.log('工具执行完成，进入下一轮对话');
+        continue; // 继续循环，让AI处理工具结果
+      }
+
+      // 没有标准工具调用，检查是否有 markdown 代码块中的命令（fallback）
       const fallbackCommand = extractCommandFromContent(rawContent);
-      if (fallbackCommand) {
+      if (fallbackCommand && round < maxRounds - 1) {
         console.log('Fallback执行命令:', fallbackCommand);
         const tool = this.toolRegistry.get('execute_command');
         if (tool) {
           const result = await tool.handler({ command: fallbackCommand });
-          const explained = this.explainResult(rawContent, fallbackCommand, result);
-          const assistantMsg: Message = {
-            id: uuidv4(),
+          messages.push({
             role: 'assistant',
-            content: explained,
-            timestamp: Date.now(),
-          };
-          this.sessionManager.addMessage(sessionId, assistantMsg);
-          return [userMessage, assistantMsg];
+            content: rawContent,
+          });
+          messages.push({
+            role: 'user',
+            content: `请根据以下命令执行结果回答用户问题，不要发起新的工具调用：\n\n命令: ${fallbackCommand}\n结果: ${result.success ? result.output : result.error}`,
+          });
+          continue;
         }
       }
 
+      // AI 不再返回工具调用，生成最终回复
+      console.log('生成最终回复');
       const assistantMsg: Message = {
         id: uuidv4(),
         role: 'assistant',
         content: rawContent,
+        type: lastRiskLevel === 'danger' ? 'risk' : 'text',
+        riskLevel: lastRiskLevel as any,
         timestamp: Date.now(),
       };
       this.sessionManager.addMessage(sessionId, assistantMsg);
       return [userMessage, assistantMsg];
     }
-  }
 
-  private explainResult(originalContent: string, command: string, result: ToolResult): string {
-    let response = originalContent + '\n\n';
-    if (result.success && result.output) {
-      response += '```\n' + result.output + '\n```\n\n';
-    } else if (result.error) {
-      response += `⚠️ 执行出错: ${result.error}\n\n`;
-    }
-    return response;
+    // 达到最大轮数
+    console.warn('达到最大交互轮数');
+    const assistantMsg: Message = {
+      id: uuidv4(),
+      role: 'assistant',
+      content: '抱歉，该请求需要过多步骤来处理。请尝试简化您的问题，或分步骤提问。',
+      type: 'error',
+      timestamp: Date.now(),
+    };
+    this.sessionManager.addMessage(sessionId, assistantMsg);
+    return [userMessage, assistantMsg];
   }
 
   private buildMessages(session: any, systemPrompt: string): any[] {

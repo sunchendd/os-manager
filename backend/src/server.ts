@@ -115,8 +115,13 @@ app.post('/api/mirrors/configure', async (req, res) => {
 });
 
 // ========== 优化工具 ==========
-app.get('/api/optimization/tools', (req, res) => {
-  res.json({ success: true, data: optimizationEngine.getTools() });
+app.get('/api/optimization/tools', async (req, res) => {
+  try {
+    const tools = await optimizationEngine.getToolsWithStatus();
+    res.json({ success: true, data: tools });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 app.post('/api/optimization/run', async (req, res) => {
