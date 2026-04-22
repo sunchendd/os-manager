@@ -7,8 +7,9 @@ import { SystemDashboard } from './components/SystemDashboard';
 import { SystemInfoPanel } from './components/SystemInfoPanel';
 import { OptimizationPanel } from './components/OptimizationPanel';
 import { SkillMarketplace } from './components/SkillMarketplace';
+import { ServicesPanel } from './components/ServicesPanel';
 import { 
-  Server, Shield, Terminal, Settings, Zap, Puzzle
+  Server, Shield, Terminal, Settings, Zap, Puzzle, Layers
 } from 'lucide-react';
 
 
@@ -40,7 +41,7 @@ function App() {
     show: boolean;
     assessment: RiskAssessment | null;
   }>({ show: false, assessment: null });
-  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills'>('chat');
+  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services'>('chat');
 
   // 消息变化时持久化
   useEffect(() => {
@@ -119,6 +120,7 @@ function App() {
   const navItems = [
     { id: 'chat' as const, icon: Server, label: '对话' },
     { id: 'dashboard' as const, icon: Terminal, label: '监控' },
+    { id: 'services' as const, icon: Layers, label: '服务' },
     { id: 'system' as const, icon: Settings, label: '系统' },
     { id: 'optimize' as const, icon: Zap, label: '优化' },
     { id: 'skills' as const, icon: Puzzle, label: '技能' },
@@ -170,6 +172,7 @@ function App() {
             <h1 className="text-lg font-bold text-white">
               {activePanel === 'chat' && '智能对话'}
               {activePanel === 'dashboard' && '系统监控'}
+              {activePanel === 'services' && '系统服务'}
               {activePanel === 'system' && '系统配置'}
               {activePanel === 'optimize' && '系统优化'}
               {activePanel === 'skills' && '技能市场'}
@@ -177,6 +180,7 @@ function App() {
             <span className="text-xs text-slate-500">
               {activePanel === 'chat' && '自然语言管理服务器'}
               {activePanel === 'dashboard' && '实时系统状态'}
+              {activePanel === 'services' && '管理系统服务状态'}
               {activePanel === 'system' && '镜像源与系统信息'}
               {activePanel === 'optimize' && '一键优化与安全加固'}
               {activePanel === 'skills' && '扩展AI能力'}
@@ -197,7 +201,8 @@ function App() {
               onSendMessage={handleSendMessage}
             />
           )}
-          {activePanel === 'dashboard' && <SystemDashboard />}
+          {activePanel === 'dashboard' && <SystemDashboard socket={socket} />}
+          {activePanel === 'services' && <ServicesPanel />}
           {activePanel === 'system' && <SystemInfoPanel />}
           {activePanel === 'optimize' && <OptimizationPanel />}
           {activePanel === 'skills' && <SkillMarketplace />}

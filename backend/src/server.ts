@@ -89,6 +89,64 @@ app.get('/api/processes', async (req, res) => {
   }
 });
 
+// 聚合仪表盘数据接口（解决加载慢问题）
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const [disk, memory, processes, sysInfo] = await Promise.all([
+      systemTools.getDiskUsage(),
+      systemTools.getMemoryInfo(),
+      systemTools.getProcessList(),
+      systemTools.getSystemInfo(),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        disk: disk.success ? disk.output : null,
+        memory: memory.success ? memory.output : null,
+        processes: processes.success ? processes.output : null,
+        sysInfo: sysInfo.success ? sysInfo.output : null,
+        timestamp: Date.now(),
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 系统服务列表
+app.get('/api/services', async (req, res) => {
+  try {
+    const result = await systemTools.executeCommand('systemctl list-units --type=service --state=running --no-pager --no-legend | head -30');
+    const services = result.output.split('\n').filter(l => l.trim()).map(line => {
+      const parts = line.trim().split(/\s+/);
+      return {
+        name: parts[0] || '',
+        load: parts[1] || '',
+        active: parts[2] || '',
+        sub: parts[3] || '',
+        description: parts.slice(4).join(' ') || '',
+      };
+    }).filter(s => s.name);
+    res.json({ success: true, data: services });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/services/:name/:action', async (req, res) => {
+  try {
+    const { name, action } = req.params;
+    if (!['start', 'stop', 'restart', 'status'].includes(action)) {
+      return res.status(400).json({ success: false, error: '无效的操作' });
+    }
+    const result = await systemTools.executeCommand(`sudo systemctl ${action} ${name}`);
+    res.json({ success: result.success, output: result.output || result.error });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ========== OS检测与镜像源 ==========
 app.get('/api/os-info', async (req, res) => {
   try {
@@ -159,8 +217,8 @@ app.get('/api/skills/:id', (req, res) => {
 
 app.post('/api/skills/install', async (req, res) => {
   try {
-    const { repo } = req.body;
-    const skill = await agent.getSkillRegistry().installFromGitHub(repo);
+    const { repo, skill: subSkill } = req.body;
+    const skill = await agent.getSkillRegistry().installFromGitHub(repo, subSkill);
     res.json({ success: true, data: skill });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -179,6 +237,31 @@ app.delete('/api/skills/:id', async (req, res) => {
 // Socket.io for real-time chat
 io.on('connection', (socket) => {
   console.log('客户端连接:', socket.id);
+
+  // 实时系统状态推送（每5秒）
+  const pushSystemStats = async () => {
+    try {
+      const [disk, memory, processes, sysInfo] = await Promise.all([
+        systemTools.getDiskUsage(),
+        systemTools.getMemoryInfo(),
+        systemTools.getProcessList(),
+        systemTools.getSystemInfo(),
+      ]);
+      socket.emit('system_stats', {
+        disk: disk.success ? disk.output : null,
+        memory: memory.success ? memory.output : null,
+        processes: processes.success ? processes.output : null,
+        sysInfo: sysInfo.success ? sysInfo.output : null,
+        timestamp: Date.now(),
+      });
+    } catch (e) {
+      // 静默失败，不中断连接
+    }
+  };
+
+  // 立即推送一次，然后定时推送
+  pushSystemStats();
+  const statsInterval = setInterval(pushSystemStats, 5000);
 
   socket.on('create_session', () => {
     const session = sessionManager.createSession();
@@ -230,6 +313,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    clearInterval(statsInterval);
     console.log('客户端断开:', socket.id);
   });
 });

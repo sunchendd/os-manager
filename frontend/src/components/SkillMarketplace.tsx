@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { 
+import {
   Download, Trash2, ExternalLink, Search,
-  Github, Package, X
+  Github, Package, X, Sparkles
 } from 'lucide-react';
 
 interface Skill {
@@ -18,6 +18,8 @@ export const SkillMarketplace: React.FC = () => {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [installRepo, setInstallRepo] = useState('');
+  const [installSubSkill, setInstallSubSkill] = useState('');
+  const [parsedCommand, setParsedCommand] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
@@ -39,6 +41,54 @@ export const SkillMarketplace: React.FC = () => {
     fetchSkills();
   }, []);
 
+  // 解析 npx skills add 整行命令
+  const parseSkillCommand = (input: string): { repo: string; skill: string } | null => {
+    const trimmed = input.trim();
+    if (!trimmed.toLowerCase().startsWith('npx skills add')) return null;
+
+    const rest = trimmed.replace(/^npx\s+skills\s+add\s+/i, '').trim();
+    if (!rest) return null;
+
+    const parts = rest.split(/\s+/);
+    const repo = parts[0];
+    let skill = '';
+
+    const skillIdx = parts.findIndex((p) => p === '--skill' || p === '-s');
+    if (skillIdx !== -1 && parts[skillIdx + 1]) {
+      skill = parts[skillIdx + 1];
+    }
+
+    return { repo, skill };
+  };
+
+  const handleRepoPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text');
+    const parsed = parseSkillCommand(text);
+    if (parsed) {
+      e.preventDefault();
+      setInstallRepo(parsed.repo);
+      if (parsed.skill && !installSubSkill.trim()) {
+        setInstallSubSkill(parsed.skill);
+      }
+      setParsedCommand(true);
+      setTimeout(() => setParsedCommand(false), 2000);
+    }
+  };
+
+  const handleRepoBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const text = e.target.value;
+    if (!text.trim()) return;
+    const parsed = parseSkillCommand(text);
+    if (parsed) {
+      setInstallRepo(parsed.repo);
+      if (parsed.skill && !installSubSkill.trim()) {
+        setInstallSubSkill(parsed.skill);
+      }
+      setParsedCommand(true);
+      setTimeout(() => setParsedCommand(false), 2000);
+    }
+  };
+
   const handleInstall = async () => {
     if (!installRepo.trim()) return;
     setInstalling(true);
@@ -46,11 +96,15 @@ export const SkillMarketplace: React.FC = () => {
       const res = await fetch('/api/skills/install', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repo: installRepo.trim() }),
+        body: JSON.stringify({
+          repo: installRepo.trim(),
+          skill: installSubSkill.trim() || undefined,
+        }),
       });
       const data = await res.json();
       if (data.success) {
         setInstallRepo('');
+        setInstallSubSkill('');
         await fetchSkills();
       } else {
         alert(data.error || '安装失败');
@@ -140,13 +194,34 @@ export const SkillMarketplace: React.FC = () => {
             从 GitHub 安装
           </h3>
           <div className="flex gap-2">
-            <div className="flex-1 relative">
+            <div className="flex-[2] relative">
               <input
                 type="text"
                 value={installRepo}
                 onChange={(e) => setInstallRepo(e.target.value)}
-                placeholder="owner/repo 格式，例如: obra/superpowers"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                onPaste={handleRepoPaste}
+                onBlur={handleRepoBlur}
+                placeholder="owner/repo、URL，或粘贴整行 npx 命令"
+                className={`w-full bg-slate-900 border rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors ${
+                  parsedCommand ? 'border-emerald-500/60 ring-1 ring-emerald-500/20' : 'border-slate-700'
+                }`}
+              />
+              {parsedCommand && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-emerald-400 text-xs animate-pulse">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  已自动解析
+                </div>
+              )}
+            </div>
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={installSubSkill}
+                onChange={(e) => setInstallSubSkill(e.target.value)}
+                placeholder="--skill 子目录（可选）"
+                className={`w-full bg-slate-900 border rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors ${
+                  parsedCommand && installSubSkill ? 'border-emerald-500/60 ring-1 ring-emerald-500/20' : 'border-slate-700'
+                }`}
               />
             </div>
             <button
@@ -162,8 +237,13 @@ export const SkillMarketplace: React.FC = () => {
               安装
             </button>
           </div>
-          <div className="mt-2 text-xs text-slate-500">
-            支持 skills.sh 格式，例如: <code className="text-slate-400">vercel-labs/skills</code>, <code className="text-slate-400">anthropics/skills</code>
+          <div className="mt-2 text-xs text-slate-500 space-y-1">
+            <div>
+              支持格式: <code className="text-slate-400">owner/repo</code> · <code className="text-slate-400">https://github.com/owner/repo</code>
+            </div>
+            <div>
+              多 skill 仓库: 在第二栏填入子目录名，或<strong className="text-slate-400">直接粘贴整行命令</strong>如 <code className="text-slate-400">npx skills add https://github.com/roin-orca/skills --skill simple</code>
+            </div>
           </div>
         </div>
 

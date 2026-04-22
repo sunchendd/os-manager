@@ -146,22 +146,48 @@ export class SkillRegistry {
     return result;
   }
 
-  // 安装 skill 从 GitHub (owner/repo 格式)
-  async installFromGitHub(repo: string): Promise<Skill> {
+  // 安装 skill 从 GitHub
+  // 支持格式:
+  // 1. owner/repo - 下载根目录 SKILL.md
+  // 2. owner/repo --skill subdir - 下载子目录中的 skill (兼容 npx skills add 格式)
+  async installFromGitHub(repo: string, subSkill?: string): Promise<Skill> {
+    // 处理完整 GitHub URL
+    let cleanRepo = repo;
+    if (repo.includes('github.com/')) {
+      const match = repo.match(/github\.com\/([^\/]+\/[^\/]+)/);
+      if (match) {
+        cleanRepo = match[1];
+      }
+    }
+    // 去掉 .git 后缀
+    cleanRepo = cleanRepo.replace(/\.git$/, '');
+
     // 验证格式
-    if (!repo.includes('/')) {
-      throw new Error('格式错误，请使用 owner/repo 格式，例如: vercel-labs/skills');
+    if (!cleanRepo.includes('/')) {
+      throw new Error('格式错误，请使用 owner/repo 或 https://github.com/owner/repo 格式');
     }
 
-    const [owner, repoName] = repo.split('/');
-    const skillName = repoName.replace(/-skill$/, '').replace(/-skills$/, '');
-    
+    const [owner, repoName] = cleanRepo.split('/');
+    const branch = 'main'; // 默认分支
+
     // 尝试多个可能的 URL
-    const urls = [
-      `https://raw.githubusercontent.com/${owner}/${repoName}/main/SKILL.md`,
-      `https://raw.githubusercontent.com/${owner}/${repoName}/master/SKILL.md`,
-      `https://raw.githubusercontent.com/${owner}/${repoName}/main/skills/${skillName}/SKILL.md`,
-    ];
+    const urls: string[] = [];
+
+    if (subSkill) {
+      // 指定了子 skill，尝试子目录路径
+      // 兼容常见布局: skills/subSkill/, skill/subSkill/, 或直接在 subSkill/
+      urls.push(
+        `https://raw.githubusercontent.com/${owner}/${repoName}/${branch}/skills/${subSkill}/SKILL.md`,
+        `https://raw.githubusercontent.com/${owner}/${repoName}/${branch}/skill/${subSkill}/SKILL.md`,
+        `https://raw.githubusercontent.com/${owner}/${repoName}/${branch}/${subSkill}/SKILL.md`,
+      );
+    } else {
+      // 没有指定子 skill，先尝试根目录
+      urls.push(
+        `https://raw.githubusercontent.com/${owner}/${repoName}/${branch}/SKILL.md`,
+        `https://raw.githubusercontent.com/${owner}/${repoName}/${branch}/skills/${repoName}/SKILL.md`,
+      );
+    }
 
     let content: string | null = null;
     let successUrl = '';
@@ -169,35 +195,47 @@ export class SkillRegistry {
     for (const url of urls) {
       try {
         console.log(`尝试下载: ${url}`);
-        const response = await fetch(url, { timeout: 10000 } as any);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
         if (response.ok) {
           content = await response.text();
           successUrl = url;
           break;
         }
-      } catch (e) {
-        console.log(`下载失败: ${url}`);
+      } catch (e: any) {
+        if (e.name === 'AbortError') {
+          console.log(`下载超时: ${url}`);
+        } else {
+          console.log(`下载失败: ${url}`);
+        }
       }
     }
 
     if (!content) {
-      throw new Error(`无法从 GitHub 下载 skill: ${repo}。请检查仓库是否存在且包含 SKILL.md`);
+      const hint = subSkill
+        ? `请检查子目录 skills/${subSkill}/ 或 ${subSkill}/ 是否存在 SKILL.md`
+        : '请检查仓库是否存在且包含 SKILL.md';
+      throw new Error(`无法从 GitHub 下载 skill: ${cleanRepo}。${hint}`);
     }
 
     // 保存到本地
-    const skillDir = path.join(LOCAL_SKILL_DIR, `${owner}-${repoName}`);
+    const dirName = subSkill ? `${owner}-${repoName}-${subSkill}` : `${owner}-${repoName}`;
+    const skillDir = path.join(LOCAL_SKILL_DIR, dirName);
     await fs.mkdir(skillDir, { recursive: true });
     await fs.writeFile(path.join(skillDir, 'SKILL.md'), content, 'utf-8');
 
     const { name, description } = this.parseSkillFrontmatter(content);
-    
+    const displayName = name || (subSkill ? `${subSkill} (${owner}/${repoName})` : `${owner}/${repoName}`);
+
     const skill: Skill = {
-      id: `github-${owner}-${repoName}`,
-      name: name || `${owner}/${repoName}`,
-      description: description || `从 GitHub 安装: ${repo}`,
+      id: subSkill ? `github-${owner}-${repoName}-${subSkill}` : `github-${owner}-${repoName}`,
+      name: displayName,
+      description: description || `从 GitHub 安装: ${cleanRepo}${subSkill ? `/${subSkill}` : ''}`,
       content,
       source: 'github',
-      repo,
+      repo: cleanRepo,
       installedAt: Date.now(),
       location: skillDir,
     };

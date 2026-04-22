@@ -2,13 +2,31 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Message } from '../../../shared/types';
 import { MessageBubble } from './MessageBubble';
 import { SmartResult } from './SmartResult';
-import { Send, Mic, MicOff, Loader2, Activity, Shield, Zap } from 'lucide-react';
+import { Send, Mic, MicOff, Loader2, Activity, Shield, Zap, Volume2, VolumeX } from 'lucide-react';
 
 interface ChatPanelProps {
   messages: Message[];
   isTyping: boolean;
   onSendMessage: (content: string) => void;
 }
+
+const TTS_KEY = 'os-manager-tts-enabled';
+
+const isTTSSupported = (): boolean => {
+  return 'speechSynthesis' in window;
+};
+
+const getTTSEnabled = (): boolean => {
+  try {
+    return localStorage.getItem(TTS_KEY) === 'true';
+  } catch { return false; }
+};
+
+const setTTSEnabled = (v: boolean) => {
+  try {
+    localStorage.setItem(TTS_KEY, v ? 'true' : 'false');
+  } catch { /* ignore */ }
+};
 
 // 检查浏览器是否支持语音识别
 const isSpeechSupported = (): boolean => {
@@ -23,8 +41,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [ttsEnabled, setTtsEnabledState] = useState(getTTSEnabled);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const finalTranscriptRef = useRef('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -54,9 +74,19 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setIsListening(false);
   }, []);
 
+  const toggleTTS = () => {
+    const next = !ttsEnabled;
+    setTtsEnabledState(next);
+    setTTSEnabled(next);
+    if (!next && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
   const handleVoiceInput = () => {
     setVoiceError(null);
-    
+    finalTranscriptRef.current = '';
+
     if (isListening) {
       stopListening();
       return;
@@ -71,7 +101,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
-      
+
       recognition.lang = 'zh-CN';
       recognition.continuous = false;
       recognition.interimResults = true;
@@ -80,6 +110,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       recognition.onstart = () => {
         setIsListening(true);
         setVoiceError(null);
+        finalTranscriptRef.current = '';
       };
 
       recognition.onresult = (event: any) => {
@@ -96,6 +127,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         }
 
         if (finalTranscript) {
+          finalTranscriptRef.current += finalTranscript;
           setInput((prev) => prev + finalTranscript);
         } else if (interimTranscript) {
           setInput((prev) => {
@@ -134,6 +166,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       recognition.onend = () => {
         setIsListening(false);
         recognitionRef.current = null;
+        // 语音识别结束后，如果有识别到内容，自动发送
+        const text = finalTranscriptRef.current.trim();
+        if (text && !isTyping) {
+          onSendMessage(input.trim() || text);
+          setInput('');
+        }
+        finalTranscriptRef.current = '';
       };
 
       recognition.start();
@@ -257,6 +296,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           >
             {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
           </button>
+          {isTTSSupported() && (
+            <button
+              type="button"
+              onClick={toggleTTS}
+              className={`p-3 rounded-xl transition-all ${
+                ttsEnabled
+                  ? 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              }`}
+              title={ttsEnabled ? '语音播报已开启' : '语音播报已关闭'}
+            >
+              {ttsEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            </button>
+          )}
           <div className="flex-1 relative">
             <input
               type="text"

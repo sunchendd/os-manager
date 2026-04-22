@@ -101,11 +101,18 @@ export class MockAgentCore {
     report += `> 诊断时间: ${new Date().toLocaleString('zh-CN')}\n\n`;
     
     const results: { name: string; result: any; status: 'good' | 'warning' | 'danger' }[] = [];
+    const executedCommands: Array<{command: string; output: string; success: boolean; timestamp: number}> = [];
 
     for (const check of checks) {
       const result = await this.commandExecutor.execute(check.cmd);
       const status = this.assessCheckStatus(check.name, result.output);
       results.push({ name: check.name, result, status });
+      executedCommands.push({
+        command: check.cmd,
+        output: result.output || result.error || '',
+        success: result.success,
+        timestamp: Date.now(),
+      });
     }
 
     // 汇总
@@ -152,6 +159,7 @@ export class MockAgentCore {
       id: uuidv4(),
       role: 'assistant',
       content: report,
+      commands: executedCommands,
       timestamp: Date.now(),
     };
     this.sessionManager.addMessage(sessionId, assistantMsg);
@@ -171,11 +179,18 @@ export class MockAgentCore {
     report += `> 巡检时间: ${new Date().toLocaleString('zh-CN')}\n\n`;
     
     const results: { name: string; result: any; status: 'good' | 'warning' | 'danger' }[] = [];
+    const executedCommands: Array<{command: string; output: string; success: boolean; timestamp: number}> = [];
 
     for (const check of checks) {
       const result = await this.commandExecutor.execute(check.cmd);
       const status = this.assessSecurityStatus(check.name, result.output);
       results.push({ name: check.name, result, status });
+      executedCommands.push({
+        command: check.cmd,
+        output: result.output || result.error || '',
+        success: result.success,
+        timestamp: Date.now(),
+      });
     }
 
     const dangerCount = results.filter(r => r.status === 'danger').length;
@@ -219,6 +234,7 @@ export class MockAgentCore {
       id: uuidv4(),
       role: 'assistant',
       content: report,
+      commands: executedCommands,
       timestamp: Date.now(),
     };
     this.sessionManager.addMessage(sessionId, assistantMsg);
@@ -319,6 +335,12 @@ export class MockAgentCore {
         type: result.success ? 'text' : 'error',
         riskLevel: risk.level,
         command,
+        commands: [{
+          command,
+          output: result.output || result.error || '',
+          success: result.success,
+          timestamp: Date.now(),
+        }],
         timestamp: Date.now(),
       };
       this.sessionManager.addMessage(sessionId, assistantMsg);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Socket } from 'socket.io-client';
 import { 
   HardDrive, Cpu, MemoryStick, Network, 
   TrendingUp, AlertTriangle, CheckCircle, Activity
@@ -20,7 +21,38 @@ interface SystemData {
   hostname: string;
   os: string;
   uptime: string;
+  loadAvg: string[];
 }
+
+interface DashboardPayload {
+  disk: string | null;
+  memory: string | null;
+  processes: string | null;
+  sysInfo: string | null;
+  timestamp: number;
+}
+
+// 骨架屏组件
+const SkeletonCard: React.FC<{ cols?: number }> = ({ cols = 1 }) => (
+  <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 animate-pulse">
+    <div className="flex items-center gap-2 mb-3">
+      <div className="w-4 h-4 bg-slate-600 rounded" />
+      <div className="h-3 bg-slate-600 rounded w-20" />
+    </div>
+    {cols === 2 ? (
+      <div className="grid grid-cols-2 gap-2">
+        <div className="h-8 bg-slate-600 rounded" />
+        <div className="h-8 bg-slate-600 rounded" />
+      </div>
+    ) : (
+      <div className="space-y-2">
+        <div className="h-3 bg-slate-600 rounded w-full" />
+        <div className="h-3 bg-slate-600 rounded w-3/4" />
+        <div className="h-3 bg-slate-600 rounded w-1/2" />
+      </div>
+    )}
+  </div>
+);
 
 // 进度条组件
 const ProgressBar: React.FC<{ percent: number; label: string; value: string }> = ({ percent, label, value }) => {
@@ -64,132 +96,167 @@ const MiniChart: React.FC<{ data: number[]; color: string }> = ({ data, color })
 
   return (
     <svg width={width} height={height} className="opacity-80">
-      <polyline
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        points={points}
-      />
+      <polyline fill="none" stroke={color} strokeWidth="2" points={points} />
       <circle cx={width} cy={height - ((data[data.length - 1] - min) / range) * height} r="3" fill={color} />
     </svg>
   );
 };
 
-export const SystemDashboard: React.FC = () => {
+// 解析仪表盘数据
+const parseDashboardData = (payload: DashboardPayload): SystemData | null => {
+  if (!payload.disk && !payload.memory && !payload.processes) return null;
+
+  // 解析磁盘信息
+  const disks: DiskInfo[] = [];
+  if (payload.disk) {
+    const lines = payload.disk.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('/dev/')) {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 6) {
+          disks.push({
+            filesystem: parts[0],
+            size: parts[1],
+            used: parts[2],
+            available: parts[3],
+            usePercent: parseInt(parts[4].replace('%', '')) || 0,
+            mounted: parts[5],
+          });
+        }
+      }
+    }
+  }
+
+  // 解析内存
+  let memInfo = { total: '0', used: '0', free: '0', usePercent: 0 };
+  if (payload.memory) {
+    const memMatch = payload.memory.match(/Mem:\s+(\S+)\s+(\S+)\s+(\S+)/);
+    if (memMatch) {
+      const total = parseFloat(memMatch[1]);
+      const used = parseFloat(memMatch[2]);
+      memInfo = {
+        total: memMatch[1],
+        used: memMatch[2],
+        free: memMatch[3],
+        usePercent: Math.round((used / total) * 100) || 0,
+      };
+    }
+  }
+
+  // 解析进程
+  const processes: Array<{ user: string; pid: string; cpu: number; mem: number; command: string }> = [];
+  if (payload.processes) {
+    const lines = payload.processes.split('\n').slice(1, 6);
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 11) {
+        processes.push({
+          user: parts[0],
+          pid: parts[1],
+          cpu: parseFloat(parts[2]) || 0,
+          mem: parseFloat(parts[3]) || 0,
+          command: parts.slice(10).join(' ').substring(0, 30),
+        });
+      }
+    }
+  }
+
+  // 解析系统信息
+  let hostname = 'unknown';
+  let os = 'unknown';
+  let uptime = '';
+  let loadAvg: string[] = [];
+  if (payload.sysInfo) {
+    const nameMatch = payload.sysInfo.match(/PRETTY_NAME="([^"]+)"/);
+    if (nameMatch) os = nameMatch[1];
+    const hostMatch = payload.sysInfo.match(/Hostname:\s*(.+)/);
+    if (hostMatch) hostname = hostMatch[1].trim();
+    const uptimeMatch = payload.sysInfo.match(/up\s+([^,]+)/);
+    if (uptimeMatch) uptime = uptimeMatch[1].trim();
+    const loadMatch = payload.sysInfo.match(/load average:\s+([\d.]+),\s+([\d.]+),\s+([\d.]+)/);
+    if (loadMatch) loadAvg = [loadMatch[1], loadMatch[2], loadMatch[3]];
+  }
+
+  return {
+    disk: disks,
+    memory: memInfo,
+    cpu: { processes },
+    hostname,
+    os,
+    uptime,
+    loadAvg,
+  };
+};
+
+export const SystemDashboard: React.FC<{ socket: Socket | null }> = ({ socket }) => {
   const [data, setData] = useState<SystemData | null>(null);
   const [history, setHistory] = useState<{ cpu: number[]; mem: number[] }>({ cpu: [], mem: [] });
   const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<number>(0);
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
 
-  const fetchData = async () => {
-    try {
-      const [diskRes, memRes, cpuRes, sysRes] = await Promise.all([
-        fetch('/api/disk').then(r => r.json()),
-        fetch('/api/memory').then(r => r.json()),
-        fetch('/api/processes').then(r => r.json()),
-        fetch('/api/system-info').then(r => r.json()),
-      ]);
-
-      // 解析磁盘信息
-      const disks: DiskInfo[] = [];
-      if (diskRes.success && diskRes.data) {
-        const lines = diskRes.data.split('\n');
-        for (const line of lines) {
-          if (line.startsWith('/dev/')) {
-            const parts = line.trim().split(/\s+/);
-            if (parts.length >= 6) {
-              disks.push({
-                filesystem: parts[0],
-                size: parts[1],
-                used: parts[2],
-                available: parts[3],
-                usePercent: parseInt(parts[4].replace('%', '')) || 0,
-                mounted: parts[5],
-              });
-            }
-          }
-        }
-      }
-
-      // 解析内存
-      let memInfo = { total: '0', used: '0', free: '0', usePercent: 0 };
-      if (memRes.success && memRes.data) {
-        const memMatch = memRes.data.match(/Mem:\s+(\S+)\s+(\S+)\s+(\S+)/);
-        if (memMatch) {
-          const total = parseFloat(memMatch[1]);
-          const used = parseFloat(memMatch[2]);
-          memInfo = {
-            total: memMatch[1],
-            used: memMatch[2],
-            free: memMatch[3],
-            usePercent: Math.round((used / total) * 100) || 0,
-          };
-        }
-      }
-
-      // 解析进程
-      const processes: Array<{ user: string; pid: string; cpu: number; mem: number; command: string }> = [];
-      if (cpuRes.success && cpuRes.data) {
-        const lines = cpuRes.data.split('\n').slice(1, 6);
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 11) {
-            processes.push({
-              user: parts[0],
-              pid: parts[1],
-              cpu: parseFloat(parts[2]) || 0,
-              mem: parseFloat(parts[3]) || 0,
-              command: parts.slice(10).join(' ').substring(0, 30),
-            });
-          }
-        }
-      }
-
-      // 解析系统信息
-      let hostname = 'unknown';
-      let os = 'unknown';
-      if (sysRes.success && sysRes.data) {
-        const nameMatch = sysRes.data.match(/PRETTY_NAME="([^"]+)"/);
-        if (nameMatch) os = nameMatch[1];
-        const hostMatch = sysRes.data.match(/Hostname:\s*(.+)/);
-        if (hostMatch) hostname = hostMatch[1].trim();
-      }
-
-      const newData: SystemData = {
-        disk: disks,
-        memory: memInfo,
-        cpu: { processes },
-        hostname,
-        os,
-        uptime: '',
-      };
-
-      setData(newData);
-      
-      // 更新历史数据用于图表
+  const applyPayload = (payload: DashboardPayload) => {
+    const parsed = parseDashboardData(payload);
+    if (parsed) {
+      setData(parsed);
+      setLastUpdate(payload.timestamp);
       setHistory(prev => ({
-        cpu: [...prev.cpu.slice(-19), processes[0]?.cpu || 0],
-        mem: [...prev.mem.slice(-19), memInfo.usePercent],
+        cpu: [...prev.cpu.slice(-19), parsed.cpu.processes[0]?.cpu || 0],
+        mem: [...prev.mem.slice(-19), parsed.memory.usePercent],
       }));
-    } catch (error) {
-      console.error('获取系统信息失败:', error);
-    } finally {
       setLoading(false);
     }
   };
 
+  // 使用聚合接口获取初始数据（更快）
+  const fetchDashboard = async () => {
+    try {
+      const res = await fetch('/api/dashboard');
+      const json = await res.json();
+      if (json.success && json.data) {
+        applyPayload(json.data);
+      }
+    } catch (e) {
+      console.error('获取仪表盘数据失败:', e);
+    }
+  };
+
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    // 立即获取数据
+    fetchDashboard();
+
+    if (socket) {
+      setIsSocketConnected(socket.connected);
+      socket.on('connect', () => setIsSocketConnected(true));
+      socket.on('disconnect', () => setIsSocketConnected(false));
+      socket.on('system_stats', applyPayload);
+      return () => {
+        socket.off('connect');
+        socket.off('disconnect');
+        socket.off('system_stats', applyPayload);
+      };
+    } else {
+      // 无socket时轮询
+      const interval = setInterval(fetchDashboard, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [socket]);
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-slate-400 flex items-center gap-2">
-          <Activity className="w-5 h-5 animate-spin" />
-          加载中...
+      <div className="h-full overflow-y-auto p-4 space-y-4">
+        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <Activity className="w-5 h-5 text-indigo-400" />
+          系统监控
+          <span className="ml-auto text-xs text-slate-500">加载中...</span>
+        </h2>
+        <div className="grid grid-cols-2 gap-3">
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
       </div>
     );
   }
@@ -201,6 +268,12 @@ export const SystemDashboard: React.FC = () => {
       <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
         <Activity className="w-5 h-5 text-indigo-400" />
         系统监控
+        {isSocketConnected && (
+          <span className="ml-auto text-xs text-green-400 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+            实时推送
+          </span>
+        )}
       </h2>
 
       {/* 概览卡片 */}
@@ -313,7 +386,18 @@ export const SystemDashboard: React.FC = () => {
             <div className="text-slate-500">主机名</div>
             <div className="text-slate-300 mt-0.5">{data.hostname}</div>
           </div>
+          {data.loadAvg.length > 0 && (
+            <div className="p-2 bg-slate-900/50 rounded-lg col-span-2">
+              <div className="text-slate-500">负载平均 (1/5/15分钟)</div>
+              <div className="text-slate-300 mt-0.5">{data.loadAvg.join(' / ')}</div>
+            </div>
+          )}
         </div>
+        {lastUpdate > 0 && (
+          <div className="mt-2 text-xs text-slate-600 text-right">
+            更新于 {new Date(lastUpdate).toLocaleTimeString('zh-CN')}
+          </div>
+        )}
       </div>
     </div>
   );

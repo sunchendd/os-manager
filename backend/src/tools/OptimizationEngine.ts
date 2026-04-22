@@ -1,4 +1,5 @@
 import { CommandExecutor } from './CommandExecutor';
+import { SystemDetector } from './SystemDetector';
 
 export interface OptimizationTool {
   id: string;
@@ -121,17 +122,61 @@ export const BUILTIN_TOOLS: OptimizationTool[] = [
 
 export class OptimizationEngine {
   private executor: CommandExecutor;
+  private systemDetector: SystemDetector;
+  private packageManager: string = 'apt';
+  private pmCommands: Record<string, { install: string; update: string; service: string }> = {
+    apt: { install: 'apt install -y', update: 'apt update', service: 'systemctl' },
+    yum: { install: 'yum install -y', update: 'yum update -y', service: 'systemctl' },
+    dnf: { install: 'dnf install -y', update: 'dnf update -y', service: 'systemctl' },
+    pacman: { install: 'pacman -S --noconfirm', update: 'pacman -Sy', service: 'systemctl' },
+    unknown: { install: 'apt install -y', update: 'apt update', service: 'systemctl' },
+  };
 
   constructor() {
     this.executor = new CommandExecutor();
+    this.systemDetector = new SystemDetector();
+    this.detectPM();
+  }
+
+  private async detectPM() {
+    try {
+      const osInfo = await this.systemDetector.detect();
+      this.packageManager = osInfo.packageManager || 'apt';
+      console.log(`📦 检测到包管理器: ${this.packageManager}`);
+    } catch (e) {
+      console.warn('包管理器检测失败，使用默认 apt');
+    }
+  }
+
+  private adaptCommand(cmd: string): string {
+    const pm = this.pmCommands[this.packageManager] || this.pmCommands.apt;
+    let adapted = cmd;
+
+    // 替换包管理器命令
+    adapted = adapted.replace(/sudo apt install -y/g, `sudo ${pm.install}`);
+    adapted = adapted.replace(/sudo apt update && sudo apt install -y/g, `sudo ${pm.update} && sudo ${pm.install}`);
+    adapted = adapted.replace(/sudo apt update/g, `sudo ${pm.update}`);
+
+    // RHEL/CentOS/openEuler 系列适配
+    if (this.packageManager === 'yum' || this.packageManager === 'dnf') {
+      adapted = adapted.replace(/sudo ufw/g, 'sudo firewall-cmd');
+      adapted = adapted.replace(/dpkg -l/g, 'rpm -qa');
+      adapted = adapted.replace(/sudo dpkg-reconfigure -plow unattended-upgrades/g, 'echo "unattended-upgrades not available on RHEL, consider yum-cron"');
+    }
+
+    return adapted;
   }
 
   getTools(): OptimizationTool[] {
-    return BUILTIN_TOOLS;
+    return BUILTIN_TOOLS.map(t => ({
+      ...t,
+      command: this.adaptCommand(t.command),
+      checkCommand: t.checkCommand ? this.adaptCommand(t.checkCommand) : undefined,
+    }));
   }
 
   async getToolsWithStatus(): Promise<ToolWithStatus[]> {
-    const tools: ToolWithStatus[] = BUILTIN_TOOLS.map(t => ({ ...t, status: 'unknown', statusDetail: '检测中...' }));
+    const tools: ToolWithStatus[] = this.getTools().map(t => ({ ...t, status: 'unknown', statusDetail: '检测中...' }));
 
     await Promise.all(
       tools.map(async (tool) => {
@@ -147,7 +192,6 @@ export class OptimizationEngine {
           const numValue = parseInt(value) || 0;
 
           if (tool.id === 'tmp-clean') {
-            // tmp-clean: 数值 > 0 表示有需要清理的文件
             if (numValue > 0) {
               tool.status = 'needed';
               tool.statusDetail = `发现 ${numValue} 个过期临时文件`;
@@ -156,7 +200,6 @@ export class OptimizationEngine {
               tool.statusDetail = '暂无过期临时文件';
             }
           } else if (tool.id === 'docker-cleanup') {
-            // docker-cleanup: 数值 > 0 表示有可回收资源
             if (numValue > 0) {
               tool.status = 'needed';
               tool.statusDetail = '有可回收的Docker资源';
@@ -165,7 +208,6 @@ export class OptimizationEngine {
               tool.statusDetail = 'Docker资源状态良好';
             }
           } else {
-            // 其他配置类工具: 数值 > 0 表示已配置
             if (numValue > 0) {
               tool.status = 'applied';
               tool.statusDetail = '已配置';
@@ -185,7 +227,8 @@ export class OptimizationEngine {
   }
 
   async runTool(toolId: string): Promise<{ success: boolean; output: string }> {
-    const tool = BUILTIN_TOOLS.find(t => t.id === toolId);
+    const tools = this.getTools();
+    const tool = tools.find(t => t.id === toolId);
     if (!tool) {
       return { success: false, output: `未找到工具: ${toolId}` };
     }

@@ -200,9 +200,10 @@ export class AgentCore {
   private async executeToolCalls(
     toolCallsToExecute: Array<{id: string; name: string; arguments: Record<string, any>}>,
     onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>
-  ): Promise<{toolResults: ToolResult[]; riskAssessments: RiskAssessment[]; shouldExecute: boolean}> {
+  ): Promise<{toolResults: ToolResult[]; riskAssessments: RiskAssessment[]; shouldExecute: boolean; executedCommands: Array<{command: string; output: string; success: boolean; timestamp: number}>}> {
     const toolResults: ToolResult[] = [];
     const riskAssessments: RiskAssessment[] = [];
+    const executedCommands: Array<{command: string; output: string; success: boolean; timestamp: number}> = [];
     let shouldExecute = true;
 
     for (const toolCall of toolCallsToExecute) {
@@ -228,19 +229,43 @@ export class AgentCore {
           try {
             const result = await tool.handler(toolCall.arguments);
             toolResults.push(result);
+            if (command) {
+              executedCommands.push({
+                command,
+                output: result.output || result.error || '',
+                success: result.success,
+                timestamp: Date.now(),
+              });
+            }
             console.log(`工具 ${toolCall.name} 执行结果:`, result.success ? '成功' : '失败');
           } catch (e: any) {
             toolResults.push({ success: false, output: '', error: e.message });
+            if (command) {
+              executedCommands.push({
+                command,
+                output: e.message || '执行失败',
+                success: false,
+                timestamp: Date.now(),
+              });
+            }
           }
         } else {
           toolResults.push({ success: false, output: '', error: '操作被阻止' });
+          if (command) {
+            executedCommands.push({
+              command,
+              output: '操作被风险引擎阻止',
+              success: false,
+              timestamp: Date.now(),
+            });
+          }
         }
       } else {
         toolResults.push({ success: false, output: '', error: `未知工具: ${toolCall.name}` });
       }
     }
 
-    return { toolResults, riskAssessments, shouldExecute };
+    return { toolResults, riskAssessments, shouldExecute, executedCommands };
   }
 
   async processMessage(
@@ -266,6 +291,7 @@ export class AgentCore {
     
     const maxRounds = 10;
     let lastRiskLevel: string = 'safe';
+    const executedCommands: Array<{ command: string; output: string; success: boolean; timestamp: number }> = [];
 
     for (let round = 0; round < maxRounds; round++) {
       console.log(`=== AI 第${round + 1}轮请求 ===`);
@@ -288,8 +314,9 @@ export class AgentCore {
 
       if (toolCallsToExecute.length > 0) {
         // 执行工具调用
-        const { toolResults, riskAssessments, shouldExecute } = await this.executeToolCalls(toolCallsToExecute, onRiskConfirm);
+        const { toolResults, riskAssessments, shouldExecute, executedCommands: roundCommands } = await this.executeToolCalls(toolCallsToExecute, onRiskConfirm);
         lastRiskLevel = riskAssessments[0]?.level || 'safe';
+        executedCommands.push(...roundCommands);
 
         // 构建下一轮消息
         if (assistantMessage.tool_calls) {
@@ -348,6 +375,7 @@ export class AgentCore {
         content: rawContent,
         type: lastRiskLevel === 'danger' ? 'risk' : 'text',
         riskLevel: lastRiskLevel as any,
+        commands: executedCommands.length > 0 ? executedCommands : undefined,
         timestamp: Date.now(),
       };
       this.sessionManager.addMessage(sessionId, assistantMsg);

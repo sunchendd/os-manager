@@ -1,9 +1,17 @@
+export interface ExecutedCommand {
+  command: string;
+  output: string;
+  success: boolean;
+  timestamp: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   type?: 'text' | 'command' | 'risk' | 'error';
   command?: string;
+  commands?: ExecutedCommand[];
   riskLevel?: 'safe' | 'warning' | 'danger';
   timestamp: number;
 }
