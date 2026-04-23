@@ -18,6 +18,7 @@ interface SystemData {
   disk: DiskInfo[];
   memory: { total: string; used: string; free: string; usePercent: number };
   cpu: { processes: Array<{ user: string; pid: string; cpu: number; mem: number; command: string }> };
+  cpuUsage: number;
   hostname: string;
   os: string;
   uptime: string;
@@ -29,6 +30,7 @@ interface DashboardPayload {
   memory: string | null;
   processes: string | null;
   sysInfo: string | null;
+  cpuUsage: number | null;
   timestamp: number;
 }
 
@@ -167,16 +169,21 @@ const parseDashboardData = (payload: DashboardPayload): SystemData | null => {
     if (nameMatch) os = nameMatch[1];
     const hostMatch = payload.sysInfo.match(/Hostname:\s*(.+)/);
     if (hostMatch) hostname = hostMatch[1].trim();
-    const uptimeMatch = payload.sysInfo.match(/up\s+([^,]+)/);
+    const uptimeMatch = payload.sysInfo.match(/Uptime:\s*(.+)/);
     if (uptimeMatch) uptime = uptimeMatch[1].trim();
     const loadMatch = payload.sysInfo.match(/load average:\s+([\d.]+),\s+([\d.]+),\s+([\d.]+)/);
     if (loadMatch) loadAvg = [loadMatch[1], loadMatch[2], loadMatch[3]];
   }
 
+  const cpuUsage = payload.cpuUsage !== null && payload.cpuUsage !== undefined
+    ? Math.round(payload.cpuUsage)
+    : (processes.length > 0 ? processes[0].cpu : 0);
+
   return {
     disk: disks,
     memory: memInfo,
     cpu: { processes },
+    cpuUsage,
     hostname,
     os,
     uptime,
@@ -197,7 +204,7 @@ export const SystemDashboard: React.FC<{ socket: Socket | null }> = ({ socket })
       setData(parsed);
       setLastUpdate(payload.timestamp);
       setHistory(prev => ({
-        cpu: [...prev.cpu.slice(-19), parsed.cpu.processes[0]?.cpu || 0],
+        cpu: [...prev.cpu.slice(-19), parsed.cpuUsage],
         mem: [...prev.mem.slice(-19), parsed.memory.usePercent],
       }));
       setLoading(false);
@@ -289,10 +296,10 @@ export const SystemDashboard: React.FC<{ socket: Socket | null }> = ({ socket })
             )}
           </div>
           <div className="text-3xl font-extrabold text-[var(--color-text-primary)] tracking-tight">
-            {data.cpu.processes.length > 0 ? `${data.cpu.processes[0].cpu}%` : '--'}
+            {data.cpuUsage}%
           </div>
           <div className="text-[11px] text-[var(--color-text-muted)] mt-1 font-medium truncate">
-            最高: {data.cpu.processes.length > 0 ? data.cpu.processes[0].command : 'idle'}
+            最高进程: {data.cpu.processes.length > 0 ? `${data.cpu.processes[0].command} (${data.cpu.processes[0].cpu}%)` : 'idle'}
           </div>
         </div>
 

@@ -59,20 +59,16 @@ Not another generic AI purple gradient. Industrial-terminal aesthetic with **Bri
 <tr>
 <td width="50%">
 
-### 💬 Multi-Session Chat
+### 💬 Persistent Multi-Session Chat
 
-Context-isolated conversation windows. Switch between "Docker setup", "Security audit", and "Nginx tuning" without cross-contamination. Each session has its own memory.
+Context-isolated conversation windows that survive server restarts. Switch between "Docker setup", "Security audit", and "Nginx tuning" without cross-contamination. Each session is auto-saved to disk.
 
 </td>
 <td width="50%">
 
-### 🔧 Intelligent Skill System
+### 🎭 Custom AI Agents (Employees)
 
-Install skills from GitHub:
-```bash
-npx skills add owner/repo --skill name
-```
-Auto-keyword matching means the AI knows when to use `frontend-design`, `brainstorming`, or `git-advanced-workflows`.
+Create specialized AI agents with custom instructions, models, skills, and environment variables. Your "Linux Expert" and "Security Auditor" can coexist — pick the right one for each job.
 
 </td>
 </tr>
@@ -95,16 +91,32 @@ Disk, memory, CPU, processes, network — all visualized with glass cards and li
 <tr>
 <td width="50%">
 
+### ⏰ Scheduled Tasks (Cron Jobs)
+
+Set up recurring AI tasks with cron expressions. "Check disk every morning at 9", "Run security audit weekly" — the AI executes automatically and saves results. No more forgotten maintenance.
+
+</td>
+<td width="50%">
+
 ### ⚡ One-Click System Optimization
 
 10 optimization items with status detection (applied/needed). Auto-detects `apt`/`yum`/`dnf` for multi-distro support. Click → optimize → done.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
-### 🎙️ Voice Input + TTS
+### 🔧 Intelligent Skill System
 
-Speech-to-text for commands, text-to-speech for AI replies. Fully accessible. Talk to your server like it's Siri for sysadmins.
+Install skills from GitHub to extend AI capabilities. Auto-keyword matching means the AI knows when to use `frontend-design`, `brainstorming`, or `git-advanced-workflows`.
+
+</td>
+<td width="50%">
+
+### 🔌 OpenCode Agent Integration
+
+Seamlessly integrates with OpenCode CLI for advanced agentic workflows. The AI can browse websites, extract data, and execute multi-step tasks autonomously.
 
 </td>
 </tr>
@@ -121,6 +133,18 @@ Start/stop/restart systemd services directly from the UI. No more `systemctl` me
 ### 🌐 Mirror Source Switching
 
 One-click switch between Aliyun, Tencent, Tsinghua mirrors with auto-detection. Because `apt update` shouldn't take forever.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🎙️ Voice Input + TTS
+
+Speech-to-text for commands, text-to-speech for AI replies. Fully accessible. Talk to your server like it's Siri for sysadmins.
+
+</td>
+<td width="50%">
 
 </td>
 </tr>
@@ -172,6 +196,14 @@ Open `http://localhost:3002` and start chatting with your server! 🎉
 
 > Natural language server management. Just type what you want.
 
+### 🎭 AI Agent Management
+
+<p align="center">
+  <img src="screenshots/agent-panel-empty.png" width="90%" alt="AI Agents" />
+</p>
+
+> Create custom AI agents with unique personalities, skills, and models.
+
 ### 📊 System Dashboard
 
 <p align="center">
@@ -187,6 +219,14 @@ Open `http://localhost:3002` and start chatting with your server! 🎉
 </p>
 
 > One-click optimization with health score. Know exactly what's secure and what needs work.
+
+### ⏰ Scheduled Tasks
+
+<p align="center">
+  <img src="screenshots/scheduled-tasks.png" width="90%" alt="Scheduled Tasks" />
+</p>
+
+> Set up cron-based AI tasks. The agent runs automatically and saves results.
 
 ### 🔧 Skill Marketplace
 
@@ -214,6 +254,7 @@ Open `http://localhost:3002` and start chatting with your server! 🎉
 | **Backend** | Node.js + Express + TypeScript |
 | **AI Engine** | DeepSeek API (OpenAI-compatible) |
 | **Real-time** | Socket.io |
+| **Scheduling** | node-cron |
 | **Terminal** | XTerm.js |
 | **Voice** | Web Speech API + TTS |
 | **Fonts** | Bricolage Grotesque, JetBrains Mono |
@@ -238,6 +279,7 @@ Open `http://localhost:3002` and start chatting with your server! 🎉
 | **Safety** | `rm -rf /` happens | Risk assessment + confirmation |
 | **Monitoring** | `htop` + `df` + `free` | Beautiful unified dashboard |
 | **Optimization** | Manual, error-prone | One-click, reversible |
+| **Automation** | Manual cron editing | Visual scheduled AI tasks |
 | **Documentation** | Google everything | AI explains every step |
 
 ---

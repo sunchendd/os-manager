@@ -59,20 +59,16 @@
 <tr>
 <td width="50%">
 
-### 💬 多会话隔离聊天
+### 💬 持久化多会话隔离聊天
 
-每个会话独立上下文，互不串台！"Docker 配置"、"安全巡检"、"Nginx 调优"随便切，AI 记忆不会乱成一锅粥。
+每个会话独立上下文，互不串台，而且**重启服务不丢失**！"Docker 配置"、"安全巡检"、"Nginx 调优"随便切，AI 记忆不会乱成一锅粥。
 
 </td>
 <td width="50%">
 
-### 🔧 智能技能系统
+### 🎭 自定义 AI 员工
 
-GitHub 一键装技能：
-```bash
-npx skills add owner/repo --skill name
-```
-自动关键词匹配，AI 秒懂什么时候该召唤 `frontend-design`、`brainstorming`、`git-advanced-workflows` 各种神技！
+创建专属 AI 员工，给每个人设定不同的角色、模型、技能和专属环境变量。"Linux 专家"和"安全审计员"各司其职，按需调用！
 
 </td>
 </tr>
@@ -95,16 +91,32 @@ npx skills add owner/repo --skill name
 <tr>
 <td width="50%">
 
+### ⏰ 定时任务（AI 自动化）
+
+用 cron 表达式设置定时 AI 任务："每天早上 9 点检查磁盘"、"每周一执行安全巡检"。到点自动触发，执行结果自动保存，彻底告别忘事！
+
+</td>
+<td width="50%">
+
 ### ⚡ 一键系统优化
 
 10 大优化项，状态实时检测（已应用 / 待优化）。自动识别 `apt`/`yum`/`dnf`，多发行版通吃。点一下，等几秒，搞定！
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
-### 🎙️ 语音输入 + 语音播报
+### 🔧 智能技能系统
 
-说话就能下命令，AI 回复还能读出来。完全无障碍操作。这就是服务器版的 Siri！
+GitHub 一键装技能，无限扩展 AI 超能力。自动关键词匹配，AI 秒懂什么时候该召唤 `frontend-design`、`brainstorming` 各种神技！
+
+</td>
+<td width="50%">
+
+### 🔌 OpenCode Agent 集成
+
+无缝集成 OpenCode CLI，AI 可以自动浏览网页、提取数据、执行多步复杂任务。真正的智能代理，不是简单的问答机器人。
 
 </td>
 </tr>
@@ -121,6 +133,18 @@ npx skills add owner/repo --skill name
 ### 🌐 软件源一键切换
 
 阿里云、腾讯云、清华源——秒切！自动检测最佳源，`apt update` 再也不用等到天荒地老。
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🎙️ 语音输入 + 语音播报
+
+说话就能下命令，AI 回复还能读出来。完全无障碍操作。这就是服务器版的 Siri！
+
+</td>
+<td width="50%">
 
 </td>
 </tr>
@@ -172,6 +196,14 @@ npm run dev
 
 > 像聊天一样管理服务器，简直不要太爽！
 
+### 🎭 AI 员工管理
+
+<p align="center">
+  <img src="screenshots/agent-panel-empty.png" width="90%" alt="AI 员工" />
+</p>
+
+> 创建专属 AI 员工，不同场景调用不同专家！
+
 ### 📊 系统监控仪表盘
 
 <p align="center">
@@ -187,6 +219,14 @@ npm run dev
 </p>
 
 > 健康评分一目了然，哪里不安全点哪里！
+
+### ⏰ 定时任务面板
+
+<p align="center">
+  <img src="screenshots/scheduled-tasks.png" width="90%" alt="定时任务" />
+</p>
+
+> cron 表达式设置 AI 定时任务，到点自动执行，结果自动归档。
 
 ### 🔧 技能市场
 
@@ -214,6 +254,7 @@ npm run dev
 | **后端** | Node.js + Express + TypeScript |
 | **AI 引擎** | DeepSeek API（兼容 OpenAI 格式） |
 | **实时通信** | Socket.io |
+| **定时调度** | node-cron |
 | **终端** | XTerm.js |
 | **语音** | Web Speech API + TTS |
 | **字体** | Bricolage Grotesque、JetBrains Mono |
@@ -238,6 +279,7 @@ npm run dev
 | **安全性** | `rm -rf /` 随时发生 💀 | 风险评估 + 二次确认 🛡️ |
 | **监控** | `htop` + `df` + `free` 拼拼凑凑 | 统一高颜值仪表盘 ✨ |
 | **优化** | 手动操作，容易翻车 | 一键优化，可回退 🔄 |
+| **自动化** | 手动写 crontab | 可视化定时 AI 任务 ⏰ |
 | **查文档** | 疯狂 Google | AI 每一步都解释 📖 |
 
 ---

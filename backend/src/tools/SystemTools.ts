@@ -24,6 +24,11 @@ export class SystemTools {
     return this.executor.execute('top -bn1 | head -20');
   }
 
+  async getOverallCpuUsage(): Promise<ToolResult> {
+    // 优先用 vmstat 1秒采样（值稳定准确），fallback 到 /proc/stat 平均值（不会跳变）
+    return this.executor.execute("(command -v vmstat >/dev/null 2>&1 && vmstat 1 2 | tail -n 1 | awk '{print 100-$(NF-2)}') || awk '/^cpu /{u=$2+$4; t=$2+$4+$5; if(t==0) print 0; else print int(100*u/t)}' /proc/stat");
+  }
+
   async getProcessList(): Promise<ToolResult> {
     return this.executor.execute('ps aux --sort=-%cpu | head -20');
   }
@@ -40,7 +45,7 @@ export class SystemTools {
   }
 
   async getSystemInfo(): Promise<ToolResult> {
-    return this.executor.execute('cat /etc/os-release && echo "---" && uname -a && echo "---" && hostname');
+    return this.executor.execute('cat /etc/os-release && echo "---" && uname -a && echo "---" && echo "Hostname: $(hostname)" && echo "Uptime: $(uptime -p 2>/dev/null || uptime | sed \'s/.*up \\([^,]*\\),.*/\\1/\')"');
   }
 
   async createUser(username: string, password?: string): Promise<ToolResult> {
