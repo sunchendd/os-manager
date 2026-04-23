@@ -7,152 +7,54 @@
   <img src="https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square" />
 </p>
 
-<h1 align="center">
-  <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Travel%20and%20places/Rocket.png" width="40" />
-  OS Manager
-</h1>
+<h1 align="center">🚀 OS Manager</h1>
 
 <p align="center">
-  <b>Talk to your server. Like a human.</b>
+  <b>Your next sysadmin won't be human.</b>
 </p>
 
 <p align="center">
-  <i>"Say goodbye to memorizing complex Linux commands. Just chat."</i>
+  <i>An open-source AI-powered Linux server management platform. Talk to your server like a human — it thinks, assesses risks, and executes.</i>
 </p>
 
 <p align="center">
   <a href="#-features">Features</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-screenshots">Screenshots</a> •
-  <a href="#-tech-stack">Tech Stack</a>
+  <a href="#-architecture">Architecture</a>
 </p>
 
 ---
 
-## ✨ What is OS Manager?
+## What is OS Manager?
 
-**OS Manager** is an AI-powered Linux server management tool with a natural language interface. No more googling `tar` flags or `systemctl` syntax — just type what you want in plain English (or Chinese), and the AI handles the rest.
+OS Manager turns AI into your 24/7 Linux sysadmin. No more memorizing `tar` flags or `systemctl` syntax — just chat in natural language, and the AI handles the rest.
 
-> 🔥 **Killer feature**: It doesn't just execute commands. It **thinks**, **assesses risk**, and **explains** what it's doing — like having a senior DevOps engineer sitting next to you 24/7.
+Unlike traditional server dashboards, OS Manager doesn't just display metrics. It **thinks**, **assesses risks**, **explains actions**, and **autonomously executes** — like having a senior DevOps engineer who never sleeps.
 
----
-
-## 🌟 Feature Highlights
-
-<table>
-<tr>
-<td width="50%">
-
-### 🤖 Natural Language OS Management
-
-"Check disk usage", "optimize nginx", "create user john" — all via chat. The AI translates your intent into safe, validated shell commands.
-
-</td>
-<td width="50%">
-
-### 🎨 "Dark Terminal Luxe" UI
-
-Not another generic AI purple gradient. Industrial-terminal aesthetic with **Bricolage Grotesque** + **JetBrains Mono** fonts, coral + gold accents, glass cards, and ambient glows.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 💬 Persistent Multi-Session Chat
-
-Context-isolated conversation windows that survive server restarts. Switch between "Docker setup", "Security audit", and "Nginx tuning" without cross-contamination. Each session is auto-saved to disk.
-
-</td>
-<td width="50%">
-
-### 🎭 Custom AI Agents (Employees)
-
-Create specialized AI agents with custom instructions, models, skills, and environment variables. Your "Linux Expert" and "Security Auditor" can coexist — pick the right one for each job.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🛡️ Risk Assessment & Command Safety
-
-Dangerous commands (`rm -rf`, user deletion) trigger **risk confirmation** with danger/warning/safe badges. The AI won't nuke your server by accident.
-
-</td>
-<td width="50%">
-
-### 📊 Real-time System Dashboard
-
-Disk, memory, CPU, processes, network — all visualized with glass cards and live **Socket.io** updates. Watch your server breathe in real-time.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### ⏰ Scheduled Tasks (Cron Jobs)
-
-Set up recurring AI tasks with cron expressions. "Check disk every morning at 9", "Run security audit weekly" — the AI executes automatically and saves results. No more forgotten maintenance.
-
-</td>
-<td width="50%">
-
-### ⚡ One-Click System Optimization
-
-10 optimization items with status detection (applied/needed). Auto-detects `apt`/`yum`/`dnf` for multi-distro support. Click → optimize → done.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🔧 Intelligent Skill System
-
-Install skills from GitHub to extend AI capabilities. Auto-keyword matching means the AI knows when to use `frontend-design`, `brainstorming`, or `git-advanced-workflows`.
-
-</td>
-<td width="50%">
-
-### 🔌 OpenCode Agent Integration
-
-Seamlessly integrates with OpenCode CLI for advanced agentic workflows. The AI can browse websites, extract data, and execute multi-step tasks autonomously.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🔧 Service Management
-
-Start/stop/restart systemd services directly from the UI. No more `systemctl` memorization. See status at a glance with beautiful running/stopped indicators.
-
-</td>
-<td width="50%">
-
-### 🌐 Mirror Source Switching
-
-One-click switch between Aliyun, Tencent, Tsinghua mirrors with auto-detection. Because `apt update` shouldn't take forever.
-
-</td>
-</tr>
-<tr>
-<td width="50%">
-
-### 🎙️ Voice Input + TTS
-
-Speech-to-text for commands, text-to-speech for AI replies. Fully accessible. Talk to your server like it's Siri for sysadmins.
-
-</td>
-<td width="50%">
-
-</td>
-</tr>
-</table>
+<p align="center">
+  <img src="screenshots/chat-interface.png" width="90%" alt="OS Manager Chat Interface" />
+</p>
 
 ---
 
-## 🚀 Quick Start
+## Features
+
+- **🤖 Natural Language OS Management** — "Check disk usage", "optimize nginx", "create user john" — the AI translates intent into safe, validated shell commands.
+- **🎨 Dark Terminal Luxe UI** — Industrial-terminal aesthetic with glass cards, ambient glows, and coral + gold accents. Not another generic AI purple gradient.
+- **💬 Persistent Multi-Session Chat** — Context-isolated conversations that survive server restarts. Switch between "Docker setup", "Security audit", and "Nginx tuning" without cross-contamination.
+- **🎭 Custom AI Agents** — Create specialized agents with unique instructions, models, skills, and environment variables. Your "Linux Expert" and "Security Auditor" coexist.
+- **🛡️ Risk Assessment & Safety** — Dangerous commands trigger real-time confirmation with danger/warning/safe badges. `rm -rf /` won't happen by accident.
+- **📊 Real-Time System Dashboard** — Disk, memory, CPU, processes, network — all visualized with live Socket.io updates.
+- **⏰ Scheduled AI Tasks** — Cron-based automation: "Check disk every morning at 9", "Run security audit weekly". The AI executes autonomously and saves results.
+- **⚡ One-Click Optimization** — 10 optimization items with status detection. Auto-detects `apt`/`yum`/`dnf` across distros.
+- **🔧 Intelligent Skill System** — Install skills from GitHub to extend AI capabilities. Auto-keyword matching means the AI knows when to summon `frontend-design` or `git-advanced-workflows`.
+- **🔌 OpenCode Integration** — Seamlessly connects with OpenCode CLI for advanced agentic workflows: web browsing, data extraction, multi-step autonomous execution.
+- **🎙️ Voice Input + TTS** — Speech-to-text for commands, text-to-speech for replies. Talk to your server like Siri for sysadmins.
+
+---
+
+## Quick Start
 
 ### Prerequisites
 - Node.js 22+
@@ -162,7 +64,7 @@ Speech-to-text for commands, text-to-speech for AI replies. Fully accessible. Ta
 ### Installation
 
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/yourusername/os-manager.git
 cd os-manager
 
@@ -173,20 +75,20 @@ npm install
 cp backend/.env.example backend/.env
 # Edit backend/.env with your API keys
 
-# Start the backend
+# Start backend
 cd backend
 npx tsx watch src/server.ts
 
-# In another terminal, start the frontend
+# In another terminal, start frontend
 cd frontend
 npm run dev
 ```
 
-Open `http://localhost:3002` and start chatting with your server! 🎉
+Open `http://localhost:3002` and start talking to your server. 🎉
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 ### 🤖 Chat Interface
 
@@ -218,7 +120,7 @@ Open `http://localhost:3002` and start chatting with your server! 🎉
   <img src="screenshots/optimization-panel.png" width="90%" alt="Optimization Panel" />
 </p>
 
-> One-click optimization with health score. Know exactly what's secure and what needs work.
+> Health score at a glance. Know exactly what's secure and what needs work.
 
 ### ⏰ Scheduled Tasks
 
@@ -246,54 +148,83 @@ Open `http://localhost:3002` and start chatting with your server! 🎉
 
 ---
 
-## 🛠️ Tech Stack
+## OS Manager vs Traditional Tools
+
+| | SSH Terminal | Traditional Dashboard | OS Manager |
+|---|---|---|---|
+| **Learning curve** | Steep | Moderate | Zero |
+| **Safety** | `rm -rf /` happens | Passive monitoring | Risk assessment + confirmation |
+| **Execution** | Manual typing | Read-only | AI-autonomous |
+| **Monitoring** | `htop` + `df` + `free` | Charts only | Unified dashboard + AI insights |
+| **Optimization** | Manual, error-prone | None | One-click, reversible |
+| **Automation** | crontab editing | Alert-only | Visual scheduled AI tasks |
+| **Documentation** | Google everything | Wiki | AI explains every step |
+
+---
+
+## Architecture
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────────┐
+│   React 19   │────>│  Express     │────>│   JSON Files     │
+│   Frontend   │<────│  + Socket.io │<────│   (sessions,     │
+└──────────────┘     └──────┬───────┘     │    agents, tasks)│
+                            │             └──────────────────┘
+                     ┌──────┴───────┐
+                     │  DeepSeek    │
+                     │  AI Engine   │
+                     └──────────────┘
+```
 
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 19 + TypeScript + Tailwind CSS |
-| **Backend** | Node.js + Express + TypeScript |
+| **Backend** | Node.js + Express + TypeScript + Socket.io |
 | **AI Engine** | DeepSeek API (OpenAI-compatible) |
-| **Real-time** | Socket.io |
 | **Scheduling** | node-cron |
-| **Terminal** | XTerm.js |
+| **Persistence** | JSON file storage (zero-config) |
 | **Voice** | Web Speech API + TTS |
 | **Fonts** | Bricolage Grotesque, JetBrains Mono |
 
 ---
 
-## 🎯 Who is OS Manager For?
+## API
 
-- 🧑‍💻 **Solo developers** who manage their own VPS but hate memorizing Linux commands
-- 🏢 **Small teams** without a dedicated DevOps engineer
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Service health check |
+| `/api/agents` | GET/POST | List / create AI agents |
+| `/api/agents/:id` | PUT/DELETE | Update / delete agent |
+| `/api/scheduled-tasks` | GET/POST | List / create scheduled tasks |
+| `/api/scheduled-tasks/:id` | PUT/DELETE | Update / delete task |
+| `/api/scheduled-tasks/:id/run` | POST | Execute task manually |
+| `/api/dashboard` | GET | Aggregated system stats |
+| `/api/skills` | GET | List installed skills |
+
+See the source code for the full API reference.
+
+---
+
+## Who is OS Manager For?
+
+- 🧑‍💻 **Solo developers** managing their own VPS without a DevOps background
+- 🏢 **Small teams** without a dedicated ops engineer
 - 🎓 **Students** learning Linux who want a safety net
-- 🏠 **Homelab enthusiasts** who want a beautiful dashboard for their servers
-- 👔 **CTOs** who want their team to manage servers without breaking things
+- 🏠 **Homelab enthusiasts** who want a beautiful, intelligent server dashboard
+- 👔 **CTOs** who want their team to manage servers safely
 
 ---
 
-## 💡 Why OS Manager?
-
-| | Traditional SSH | OS Manager |
-|---|---|---|
-| **Learning curve** | Steep | Zero |
-| **Safety** | `rm -rf /` happens | Risk assessment + confirmation |
-| **Monitoring** | `htop` + `df` + `free` | Beautiful unified dashboard |
-| **Optimization** | Manual, error-prone | One-click, reversible |
-| **Automation** | Manual cron editing | Visual scheduled AI tasks |
-| **Documentation** | Google everything | AI explains every step |
-
----
-
-## 📝 License
+## License
 
 MIT License — use it, fork it, ship it. See [LICENSE](LICENSE) for details.
 
 ---
 
 <p align="center">
-  Made with <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Beating%20Heart.png" width="20" /> and a lot of ☕
+  Made with ❤️ and a lot of ☕
 </p>
 
 <p align="center">
-  <i>Star ⭐ this repo if it saved you from a `sudo rm -rf` disaster!</i>
+  <i>Star ⭐ this repo if it saved you from a <code>sudo rm -rf</code> disaster!</i>
 </p>
