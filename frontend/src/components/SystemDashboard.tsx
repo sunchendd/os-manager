@@ -289,10 +289,10 @@ export const SystemDashboard: React.FC<{ socket: Socket | null }> = ({ socket })
             )}
           </div>
           <div className="text-3xl font-extrabold text-[var(--color-text-primary)] tracking-tight">
-            {data.cpu.processes[0]?.cpu || 0}%
+            {data.cpu.processes.length > 0 ? `${data.cpu.processes[0].cpu}%` : '--'}
           </div>
           <div className="text-[11px] text-[var(--color-text-muted)] mt-1 font-medium truncate">
-            最高: {data.cpu.processes[0]?.command || 'idle'}
+            最高: {data.cpu.processes.length > 0 ? data.cpu.processes[0].command : 'idle'}
           </div>
         </div>
 

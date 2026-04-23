@@ -17,6 +17,17 @@ export const config = {
   },
 };
 
+export function updateAIConfig(updates: Partial<typeof config.deepseek>) {
+  if (updates.apiKey !== undefined) config.deepseek.apiKey = updates.apiKey;
+  if (updates.baseURL !== undefined) config.deepseek.baseURL = updates.baseURL;
+  if (updates.model !== undefined) config.deepseek.model = updates.model;
+}
+
+export function maskApiKey(key: string): string {
+  if (!key || key.length < 8) return key ? '****' : '';
+  return key.slice(0, 4) + '••••••••' + key.slice(-4);
+}
+
 if (!config.deepseek.apiKey) {
   console.warn('警告: DEEPSEEK_API_KEY 未设置，AI功能将无法使用');
 }

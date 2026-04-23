@@ -234,12 +234,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   return (
     <div className="flex h-full">
       {/* Session Sidebar */}
-      <div className="w-[220px] bg-[#0b1120] border-r border-slate-800 flex flex-col flex-shrink-0">
-        <div className="p-3 border-b border-slate-800">
+      <div className="w-[220px] border-r flex flex-col flex-shrink-0 theme-transition"
+           style={{ backgroundColor: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+        <div className="p-3 border-b theme-transition" style={{ borderColor: 'var(--color-border)' }}>
           <button
             onClick={onCreateSession}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-all"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)' }}>
             <Plus className="w-4 h-4" />
             新建会话
           </button>
@@ -256,18 +257,17 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   onClick={() => onSwitchSession(session.id)}
                   className={`group relative mx-2 px-3 py-2.5 rounded-lg cursor-pointer border-l-2 transition-all ${
                     isActive
-                      ? 'bg-slate-800/80 border-indigo-500'
-                      : 'border-transparent hover:bg-slate-800/50'
-                  }`}
-                >
+                      ? 'bg-[var(--color-surface)] border-[var(--color-accent)]'
+                      : 'border-transparent hover:bg-[var(--color-surface-hover)]'
+                  }`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className={`text-sm font-medium truncate ${
-                        isActive ? 'text-indigo-300' : 'text-slate-300'
+                        isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-secondary)]'
                       }`}>
                         {getSessionTitle(session)}
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
+                      <div className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                         {formatTime(session.updatedAt)}
                       </div>
                     </div>
@@ -275,8 +275,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                       onClick={(e) => handleDelete(e, session.id)}
                       className={`p-1 rounded-md transition-all ${
                         isActive
-                          ? 'text-slate-400 hover:text-red-400 hover:bg-red-400/10'
-                          : 'text-slate-600 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100'
+                          ? 'text-[var(--color-text-secondary)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-dim)]'
+                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-dim)] opacity-0 group-hover:opacity-100'
                       }`}
                       title="删除会话"
                     >
@@ -288,18 +288,18 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             })}
             
           {Object.keys(sessions).length === 0 && (
-            <div className="px-4 py-8 text-center text-slate-600 text-sm">
+            <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
               <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
               暂无会话
             </div>
           )}
         </div>
-        
-        <div className="p-3 border-t border-slate-800">
+
+        <div className="p-3 border-t theme-transition" style={{ borderColor: 'var(--color-border)' }}>
           <button
             onClick={onClearSession}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-400 hover:text-red-400 hover:bg-slate-800/50 text-sm rounded-lg transition-colors"
-          >
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-dim)]"
+            style={{ color: 'var(--color-text-secondary)' }}>
             <Shield className="w-4 h-4" />
             清除对话
           </button>

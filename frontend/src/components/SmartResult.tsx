@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { 
-  HardDrive, MemoryStick, Cpu, Network, 
+import {
+  HardDrive, MemoryStick, Cpu, Network,
   AlertTriangle, CheckCircle,
   BarChart3, TrendingUp, Shield
 } from 'lucide-react';
@@ -23,42 +23,44 @@ export const SmartResult: React.FC<SmartResultProps> = ({ content }) => {
     return null;
   }
 
-  const getStatusColor = (status?: string) => {
+  const getStatusStyle = (status?: string) => {
     switch (status) {
-      case 'good': return 'text-green-400 bg-green-400/10 border-green-400/30';
-      case 'warning': return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30';
-      case 'danger': return 'text-red-400 bg-red-400/10 border-red-400/30';
-      default: return 'text-slate-300 bg-slate-700/50 border-slate-600';
+      case 'good': return { color: 'var(--color-success)', backgroundColor: 'var(--color-success-dim)', borderColor: 'var(--color-success)' };
+      case 'warning': return { color: 'var(--color-warning)', backgroundColor: 'var(--color-warning-dim)', borderColor: 'var(--color-warning)' };
+      case 'danger': return { color: 'var(--color-danger)', backgroundColor: 'var(--color-danger-dim)', borderColor: 'var(--color-danger)' };
+      default: return { color: 'var(--color-text-secondary)', backgroundColor: 'var(--color-surface-hover)', borderColor: 'var(--color-border)' };
     }
   };
 
   const getIcon = () => {
     switch (parsedData.type) {
-      case 'disk': return <HardDrive className="w-5 h-5 text-blue-400" />;
-      case 'memory': return <MemoryStick className="w-5 h-5 text-green-400" />;
-      case 'cpu': return <Cpu className="w-5 h-5 text-purple-400" />;
-      case 'process': return <BarChart3 className="w-5 h-5 text-orange-400" />;
-      case 'network': return <Network className="w-5 h-5 text-cyan-400" />;
-      case 'security': return <Shield className="w-5 h-5 text-red-400" />;
-      default: return <TrendingUp className="w-5 h-5 text-indigo-400" />;
+      case 'disk': return <HardDrive className="w-5 h-5" style={{ color: 'var(--color-secondary)' }} />;
+      case 'memory': return <MemoryStick className="w-5 h-5" style={{ color: 'var(--color-success)' }} />;
+      case 'cpu': return <Cpu className="w-5 h-5" style={{ color: 'var(--color-accent)' }} />;
+      case 'process': return <BarChart3 className="w-5 h-5" style={{ color: 'var(--color-warning)' }} />;
+      case 'network': return <Network className="w-5 h-5" style={{ color: 'var(--color-secondary)' }} />;
+      case 'security': return <Shield className="w-5 h-5" style={{ color: 'var(--color-danger)' }} />;
+      default: return <TrendingUp className="w-5 h-5" style={{ color: 'var(--color-accent)' }} />;
     }
   };
 
   return (
     <div className="mt-2 ml-11">
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl overflow-hidden">
+      <div className="rounded-xl overflow-hidden border theme-transition glass-card"
+           style={{ borderColor: 'var(--color-border)' }}>
         {/* 头部 */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-700/50 bg-slate-800/80">
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b theme-transition"
+             style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           {getIcon()}
-          <span className="text-sm font-medium text-slate-300">{parsedData.title}</span>
+          <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{parsedData.title}</span>
           {parsedData.metrics.some(m => m.status === 'danger') && (
-            <span className="ml-auto flex items-center gap-1 text-xs text-red-400">
+            <span className="ml-auto flex items-center gap-1 text-xs" style={{ color: 'var(--color-danger)' }}>
               <AlertTriangle className="w-3.5 h-3.5" />
               发现异常
             </span>
           )}
           {parsedData.metrics.every(m => m.status === 'good') && (
-            <span className="ml-auto flex items-center gap-1 text-xs text-green-400">
+            <span className="ml-auto flex items-center gap-1 text-xs" style={{ color: 'var(--color-success)' }}>
               <CheckCircle className="w-3.5 h-3.5" />
               状态正常
             </span>
@@ -67,15 +69,19 @@ export const SmartResult: React.FC<SmartResultProps> = ({ content }) => {
 
         {/* 指标卡片 */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 p-3">
-          {parsedData.metrics.map((metric, i) => (
-            <div 
-              key={i}
-              className={`p-3 rounded-lg border ${getStatusColor(metric.status)}`}
-            >
-              <div className="text-xs opacity-70 mb-1">{metric.label}</div>
-              <div className="text-sm font-semibold">{metric.value}</div>
-            </div>
-          ))}
+          {parsedData.metrics.map((metric, i) => {
+            const style = getStatusStyle(metric.status);
+            return (
+              <div
+                key={i}
+                className="p-3 rounded-lg border theme-transition"
+                style={style}
+              >
+                <div className="text-xs opacity-70 mb-1">{metric.label}</div>
+                <div className="text-sm font-semibold">{metric.value}</div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -84,7 +90,7 @@ export const SmartResult: React.FC<SmartResultProps> = ({ content }) => {
 
 function parseContent(content: string): ParsedData | null {
   // 检测内容类型并提取关键指标
-  
+
   // 磁盘分析
   if (content.includes('Filesystem') && content.includes('Size') && content.includes('Use%')) {
     const lines = content.split('\n');

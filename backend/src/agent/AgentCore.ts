@@ -111,14 +111,24 @@ export class AgentCore {
   private skillRegistry: SkillRegistry;
 
   constructor(sessionManager: SessionManager) {
-    this.openai = new OpenAI({
-      apiKey: config.deepseek.apiKey,
-      baseURL: config.deepseek.baseURL,
-    });
     this.toolRegistry = new ToolRegistry();
     this.riskEngine = new RiskEngine();
     this.sessionManager = sessionManager;
     this.skillRegistry = new SkillRegistry();
+    this.openai = this.createOpenAI();
+  }
+
+  private createOpenAI(): OpenAI {
+    return new OpenAI({
+      apiKey: config.deepseek.apiKey,
+      baseURL: config.deepseek.baseURL,
+    });
+  }
+
+  /** 配置变更后重新初始化 */
+  reinit() {
+    this.openai = this.createOpenAI();
+    console.log('🤖 AgentCore 已重新初始化');
   }
 
   getSkillRegistry(): SkillRegistry {

@@ -30,7 +30,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const id = Math.random().toString(36).substring(2, 9);
     const newToast: Toast = { ...toast, id, duration: toast.duration || 5000 };
     setToasts(prev => [...prev, newToast]);
-    
+
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, newToast.duration);
@@ -41,17 +41,17 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, []);
 
   const iconMap = {
-    success: <CheckCircle className="w-5 h-5 text-green-400" />,
-    error: <AlertTriangle className="w-5 h-5 text-red-400" />,
-    warning: <AlertCircle className="w-5 h-5 text-yellow-400" />,
-    info: <Info className="w-5 h-5 text-blue-400" />,
+    success: <CheckCircle className="w-5 h-5" style={{ color: 'var(--color-success)' }} />,
+    error: <AlertTriangle className="w-5 h-5" style={{ color: 'var(--color-danger)' }} />,
+    warning: <AlertCircle className="w-5 h-5" style={{ color: 'var(--color-warning)' }} />,
+    info: <Info className="w-5 h-5" style={{ color: 'var(--color-secondary)' }} />,
   };
 
-  const borderMap = {
-    success: 'border-green-500/30',
-    error: 'border-red-500/30',
-    warning: 'border-yellow-500/30',
-    info: 'border-blue-500/30',
+  const borderMap: Record<string, string> = {
+    success: 'var(--color-success)',
+    error: 'var(--color-danger)',
+    warning: 'var(--color-warning)',
+    info: 'var(--color-secondary)',
   };
 
   return (
@@ -62,19 +62,25 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className={`bg-slate-800 border ${borderMap[toast.type]} rounded-xl p-4 shadow-xl shadow-black/20 animate-in slide-in-from-right fade-in duration-200`}
+            className="rounded-xl p-4 shadow-xl animate-in slide-in-from-right fade-in duration-200 theme-transition"
+            style={{
+              backgroundColor: 'var(--color-surface)',
+              border: `1px solid ${borderMap[toast.type]}40`,
+              boxShadow: '0 8px 32px -8px rgba(0,0,0,0.3)',
+            }}
           >
             <div className="flex items-start gap-3">
               {iconMap[toast.type]}
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-white">{toast.title}</div>
+                <div className="text-sm font-medium theme-transition" style={{ color: 'var(--color-text-primary)' }}>{toast.title}</div>
                 {toast.message && (
-                  <div className="text-xs text-slate-400 mt-1">{toast.message}</div>
+                  <div className="text-xs mt-1 theme-transition" style={{ color: 'var(--color-text-secondary)' }}>{toast.message}</div>
                 )}
               </div>
               <button
                 onClick={() => removeToast(toast.id)}
-                className="text-slate-500 hover:text-white transition-colors"
+                className="transition-colors theme-transition"
+                style={{ color: 'var(--color-text-muted)' }}
               >
                 <X className="w-4 h-4" />
               </button>

@@ -3,7 +3,7 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
-import { config } from './config';
+import { config, updateAIConfig, maskApiKey } from './config';
 import { AgentCore } from './agent/AgentCore';
 import { MockAgentCore } from './agent/MockAgentCore';
 import { SessionManager } from './agent/SessionManager';
@@ -33,22 +33,39 @@ const systemDetector = new SystemDetector();
 const mirrorConfigurator = new MirrorConfigurator();
 const optimizationEngine = new OptimizationEngine();
 
-// 根据API key是否配置选择Agent
-const useRealAI = !!config.deepseek.apiKey && config.deepseek.apiKey !== 'sk-test-key-placeholder';
-const agent = useRealAI 
-  ? new AgentCore(sessionManager)
-  : new MockAgentCore(sessionManager);
+// Agent 初始化与热更新
+function isRealAIEnabled() {
+  return !!config.deepseek.apiKey && config.deepseek.apiKey !== 'sk-test-key-placeholder';
+}
 
-console.log(`🤖 AI模式: ${useRealAI ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
+function createAgent() {
+  return isRealAIEnabled()
+    ? new AgentCore(sessionManager)
+    : new MockAgentCore(sessionManager);
+}
+
+let agent = createAgent();
+console.log(`🤖 AI模式: ${isRealAIEnabled() ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
+
+function reinitAgent() {
+  const wasReal = agent instanceof AgentCore;
+  const nowReal = isRealAIEnabled();
+  if (wasReal !== nowReal) {
+    agent = createAgent();
+    console.log(`🤖 AI模式切换: ${nowReal ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
+  } else {
+    agent.reinit();
+  }
+}
 
 const systemTools = new SystemTools();
 
 // REST API
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    mode: useRealAI ? 'deepseek' : 'mock',
-    timestamp: new Date().toISOString() 
+  res.json({
+    status: 'ok',
+    mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -238,6 +255,48 @@ app.post('/api/skills/:id/force-delete', async (req, res) => {
   try {
     const result = await agent.getSkillRegistry().forceUninstallSkill(req.params.id);
     res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== AI 配置 ==========
+app.get('/api/config/ai', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      apiKey: maskApiKey(config.deepseek.apiKey),
+      baseURL: config.deepseek.baseURL,
+      model: config.deepseek.model,
+      mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+    },
+  });
+});
+
+app.post('/api/config/ai', async (req, res) => {
+  try {
+    const { apiKey, baseURL, model } = req.body;
+    const updates: Partial<typeof config.deepseek> = {};
+
+    // 如果传入的 key 不是掩码形式（包含 •），则更新
+    if (apiKey !== undefined && !apiKey.includes('•')) {
+      updates.apiKey = apiKey.trim();
+    }
+    if (baseURL !== undefined) updates.baseURL = baseURL.trim();
+    if (model !== undefined) updates.model = model.trim();
+
+    updateAIConfig(updates);
+    reinitAgent();
+
+    res.json({
+      success: true,
+      data: {
+        apiKey: maskApiKey(config.deepseek.apiKey),
+        baseURL: config.deepseek.baseURL,
+        model: config.deepseek.model,
+        mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+      },
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

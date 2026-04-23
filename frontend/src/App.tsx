@@ -8,7 +8,8 @@ import { SystemInfoPanel } from './components/SystemInfoPanel';
 import { OptimizationPanel } from './components/OptimizationPanel';
 import { SkillMarketplace } from './components/SkillMarketplace';
 import { ServicesPanel } from './components/ServicesPanel';
-import { 
+import { ThemeSwitcher } from './components/ThemeSwitcher';
+import {
   Server, Terminal, Settings, Zap, Puzzle, Layers
 } from 'lucide-react';
 
@@ -25,8 +26,8 @@ function App() {
   }>({ show: false, assessment: null });
   const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services'>('chat');
 
-  const activeMessages = chatState.activeSessionId 
-    ? chatState.sessions[chatState.activeSessionId]?.messages || [] 
+  const activeMessages = chatState.activeSessionId
+    ? chatState.sessions[chatState.activeSessionId]?.messages || []
     : [];
   const isTyping = chatState.activeSessionId ? !!typingSessions[chatState.activeSessionId] : false;
 
@@ -235,13 +236,24 @@ function App() {
     { id: 'skills' as const, icon: Puzzle, label: '技能' },
   ];
 
+  const panelTitles: Record<string, { title: string; subtitle: string }> = {
+    chat: { title: '智能对话', subtitle: '自然语言管理服务器' },
+    dashboard: { title: '系统监控', subtitle: '实时系统状态' },
+    services: { title: '系统服务', subtitle: '管理系统服务状态' },
+    system: { title: '系统配置', subtitle: '镜像源与系统信息' },
+    optimize: { title: '系统优化', subtitle: '一键优化与安全加固' },
+    skills: { title: '技能市场', subtitle: '扩展AI能力' },
+  };
+
   return (
-    <div className="flex h-screen bg-slate-900">
+    <div className="flex h-screen theme-transition" style={{ backgroundColor: 'var(--color-bg)' }}>
       {/* 侧边栏 */}
-      <div className="w-16 bg-slate-800 flex flex-col items-center py-4 border-r border-slate-700">
+      <div className="w-16 flex flex-col items-center py-4 border-r theme-transition"
+           style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <div className="mb-6">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-            <Server className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center theme-transition"
+               style={{ backgroundColor: 'var(--color-accent)' }}>
+            <Server className="w-5 h-5" style={{ color: 'var(--color-text-on-accent)' }} />
           </div>
         </div>
         <nav className="flex-1 flex flex-col gap-1">
@@ -251,14 +263,19 @@ function App() {
               onClick={() => setActivePanel(item.id)}
               className={`p-3 rounded-xl transition-all relative group ${
                 activePanel === item.id
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  ? 'shadow-lg'
+                  : 'hover:opacity-100 opacity-70'
               }`}
+              style={activePanel === item.id
+                ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)', boxShadow: '0 4px 20px -4px var(--color-glow-accent)' }
+                : { color: 'var(--color-text-muted)' }
+              }
               title={item.label}
             >
               <item.icon className="w-5 h-5" />
               {/* Tooltip */}
-              <span className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 border border-slate-700">
+              <span className="absolute left-full ml-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 border"
+                    style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-primary)', borderColor: 'var(--color-border)' }}>
                 {item.label}
               </span>
             </button>
@@ -269,28 +286,23 @@ function App() {
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 头部 */}
-        <header className="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <header className="border-b px-6 py-3 flex items-center justify-between flex-shrink-0 theme-transition"
+                style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold text-white">
-              {activePanel === 'chat' && '智能对话'}
-              {activePanel === 'dashboard' && '系统监控'}
-              {activePanel === 'services' && '系统服务'}
-              {activePanel === 'system' && '系统配置'}
-              {activePanel === 'optimize' && '系统优化'}
-              {activePanel === 'skills' && '技能市场'}
+            <h1 className="text-lg font-bold theme-transition" style={{ color: 'var(--color-text-primary)' }}>
+              {panelTitles[activePanel].title}
             </h1>
-            <span className="text-xs text-slate-500">
-              {activePanel === 'chat' && '自然语言管理服务器'}
-              {activePanel === 'dashboard' && '实时系统状态'}
-              {activePanel === 'services' && '管理系统服务状态'}
-              {activePanel === 'system' && '镜像源与系统信息'}
-              {activePanel === 'optimize' && '一键优化与安全加固'}
-              {activePanel === 'skills' && '扩展AI能力'}
+            <span className="text-xs theme-transition" style={{ color: 'var(--color-text-muted)' }}>
+              {panelTitles[activePanel].subtitle}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-xs text-slate-400">已连接</span>
+          <div className="flex items-center gap-3">
+            <ThemeSwitcher />
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full animate-pulse"
+                   style={{ backgroundColor: 'var(--color-success)' }} />
+              <span className="text-xs theme-transition" style={{ color: 'var(--color-text-muted)' }}>已连接</span>
+            </div>
           </div>
         </header>
 
