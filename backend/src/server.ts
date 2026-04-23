@@ -14,6 +14,8 @@ import { SystemTools } from './tools/SystemTools';
 import { SystemDetector } from './tools/SystemDetector';
 import { MirrorConfigurator } from './tools/MirrorConfigurator';
 import { OptimizationEngine } from './tools/OptimizationEngine';
+import { TaskScheduler } from './scheduler/TaskScheduler';
+import { validate as validateCron } from 'node-cron';
 
 const app = express();
 const httpServer = createServer(app);
@@ -49,6 +51,7 @@ function createAgent() {
 let agent = createAgent();
 const opencodeAvailable = isOpenCodeAvailable();
 const agentManager = new AgentManager();
+const taskScheduler = new TaskScheduler(sessionManager, agent, agentManager);
 console.log(`🤖 AI模式: ${isRealAIEnabled() ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
 console.log(`🔌 Opencode Agent: ${opencodeAvailable ? '已安装' : '未安装'}`);
 console.log(`🎭 Agents: ${agentManager.list().length} 个已配置`);
@@ -63,6 +66,9 @@ function reinitAgent() {
     agent.reinit();
   }
 }
+
+// 启动定时任务调度器
+taskScheduler.start();
 
 const systemTools = new SystemTools();
 
@@ -187,11 +193,12 @@ app.delete('/api/agents/:id', (req, res) => {
 // 聚合仪表盘数据接口（解决加载慢问题）
 app.get('/api/dashboard', async (req, res) => {
   try {
-    const [disk, memory, processes, sysInfo] = await Promise.all([
+    const [disk, memory, processes, sysInfo, cpuUsage] = await Promise.all([
       systemTools.getDiskUsage(),
       systemTools.getMemoryInfo(),
       systemTools.getProcessList(),
       systemTools.getSystemInfo(),
+      systemTools.getOverallCpuUsage(),
     ]);
 
     res.json({
@@ -201,6 +208,7 @@ app.get('/api/dashboard', async (req, res) => {
         memory: memory.success ? memory.output : null,
         processes: processes.success ? processes.output : null,
         sysInfo: sysInfo.success ? sysInfo.output : null,
+        cpuUsage: cpuUsage.success ? parseFloat(cpuUsage.output.trim()) || 0 : null,
         timestamp: Date.now(),
       },
     });
@@ -291,6 +299,86 @@ app.get('/api/optimization/score', async (req, res) => {
   try {
     const score = await optimizationEngine.getSystemScore();
     res.json({ success: true, data: score });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== 定时任务 ==========
+app.get('/api/scheduled-tasks', (req, res) => {
+  res.json({ success: true, data: taskScheduler.getAll() });
+});
+
+app.get('/api/scheduled-tasks/:id', (req, res) => {
+  const task = taskScheduler.getById(req.params.id);
+  if (task) {
+    res.json({ success: true, data: task });
+  } else {
+    res.status(404).json({ success: false, error: '任务不存在' });
+  }
+});
+
+app.post('/api/scheduled-tasks', (req, res) => {
+  try {
+    const { name, agentId, prompt, cronExpression, enabled } = req.body;
+    if (!name || !prompt || !cronExpression) {
+      return res.status(400).json({ success: false, error: '名称、提示词和触发时间不能为空' });
+    }
+      if (!validateCron(cronExpression)) {
+      return res.status(400).json({ success: false, error: '无效的 cron 表达式' });
+    }
+    const task = taskScheduler.create({
+      name,
+      agentId: agentId || null,
+      prompt,
+      cronExpression,
+      enabled: enabled !== false,
+    });
+    res.json({ success: true, data: task });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put('/api/scheduled-tasks/:id', (req, res) => {
+  try {
+    const { name, agentId, prompt, cronExpression, enabled } = req.body;
+    const patch: any = {};
+    if (name !== undefined) patch.name = name;
+    if (agentId !== undefined) patch.agentId = agentId;
+    if (prompt !== undefined) patch.prompt = prompt;
+    if (cronExpression !== undefined) {
+    if (!validateCron(cronExpression)) {
+        return res.status(400).json({ success: false, error: '无效的 cron 表达式' });
+      }
+      patch.cronExpression = cronExpression;
+    }
+    if (enabled !== undefined) patch.enabled = enabled;
+
+    const task = taskScheduler.update(req.params.id, patch);
+    if (task) {
+      res.json({ success: true, data: task });
+    } else {
+      res.status(404).json({ success: false, error: '任务不存在' });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/scheduled-tasks/:id', (req, res) => {
+  const success = taskScheduler.delete(req.params.id);
+  if (success) {
+    res.json({ success: true });
+  } else {
+    res.status(404).json({ success: false, error: '任务不存在' });
+  }
+});
+
+app.post('/api/scheduled-tasks/:id/run', async (req, res) => {
+  try {
+    const result = await taskScheduler.runNow(req.params.id);
+    res.json({ success: result.success, data: result });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -387,17 +475,19 @@ io.on('connection', (socket) => {
   // 实时系统状态推送（每5秒）
   const pushSystemStats = async () => {
     try {
-      const [disk, memory, processes, sysInfo] = await Promise.all([
+      const [disk, memory, processes, sysInfo, cpuUsage] = await Promise.all([
         systemTools.getDiskUsage(),
         systemTools.getMemoryInfo(),
         systemTools.getProcessList(),
         systemTools.getSystemInfo(),
+        systemTools.getOverallCpuUsage(),
       ]);
       socket.emit('system_stats', {
         disk: disk.success ? disk.output : null,
         memory: memory.success ? memory.output : null,
         processes: processes.success ? processes.output : null,
         sysInfo: sysInfo.success ? sysInfo.output : null,
+        cpuUsage: cpuUsage.success ? parseFloat(cpuUsage.output.trim()) || 0 : null,
         timestamp: Date.now(),
       });
     } catch (e) {

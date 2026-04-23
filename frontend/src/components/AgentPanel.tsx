@@ -36,6 +36,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agents, onAgentsChange }
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [availableSkills, setAvailableSkills] = useState<Skill[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(true);
@@ -117,6 +118,7 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agents, onAgentsChange }
   const handleSave = async () => {
     if (!form.name.trim() || !form.instructions.trim()) return;
     setSaving(true);
+    setSaveError(null);
     try {
       if (isCreating) {
         const res = await fetch('/api/agents', {
@@ -127,6 +129,9 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agents, onAgentsChange }
         const data = await res.json();
         if (data.success) {
           onAgentsChange([...agents, data.data]);
+          handleCancel();
+        } else {
+          setSaveError(data.error || '保存失败，请重试');
         }
       } else if (editingId) {
         const res = await fetch(`/api/agents/${editingId}`, {
@@ -137,11 +142,13 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agents, onAgentsChange }
         const data = await res.json();
         if (data.success) {
           onAgentsChange(agents.map(a => (a.id === editingId ? data.data : a)));
+          handleCancel();
+        } else {
+          setSaveError(data.error || '保存失败，请重试');
         }
       }
-      handleCancel();
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      setSaveError(`网络错误: ${e.message || '无法连接到服务器'}`);
     } finally {
       setSaving(false);
     }
@@ -251,6 +258,11 @@ export const AgentPanel: React.FC<AgentPanelProps> = ({ agents, onAgentsChange }
               <X className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
             </button>
           </div>
+          {saveError && (
+            <div className="px-3 py-2 rounded-lg text-xs font-medium" style={{ backgroundColor: 'var(--color-danger-dim)', color: 'var(--color-danger)', border: '1px solid var(--color-danger)' }}>
+              ⚠️ {saveError}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

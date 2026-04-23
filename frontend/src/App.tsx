@@ -10,9 +10,12 @@ import { SkillMarketplace } from './components/SkillMarketplace';
 import { ServicesPanel } from './components/ServicesPanel';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { AgentPanel } from './components/AgentPanel';
+import { ScheduledTasksPanel } from './components/ScheduledTasksPanel';
 import {
-  Server, Terminal, Settings, Zap, Puzzle, Layers, Bot
+  Server, Terminal, Settings, Zap, Puzzle, Layers, Bot, Clock
 } from 'lucide-react';
+
+const ACTIVE_SESSION_KEY = 'os-manager-active-session';
 
 export interface OpenCodeEvent {
   type: 'thinking' | 'tool_call' | 'tool_result' | 'text' | 'done' | 'error';
@@ -35,7 +38,7 @@ function App() {
     show: boolean;
     assessment: RiskAssessment | null;
   }>({ show: false, assessment: null });
-  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services' | 'agents'>('chat');
+  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services' | 'agents' | 'scheduled'>('chat');
 
   // Opencode 状态
   const [opencodeAvailable, setOpencodeAvailable] = useState(false);
@@ -66,7 +69,7 @@ function App() {
 
     newSocket.on('connect', () => {
       console.log('已连接到服务器');
-      newSocket.emit('create_session');
+      // 先获取已有会话列表，由 sessions_list 决定恢复或创建
       newSocket.emit('list_sessions');
       // 检测 opencode 可用性
       fetch('/api/health')
@@ -90,16 +93,42 @@ function App() {
         },
         activeSessionId: data.sessionId,
       }));
+      try { localStorage.setItem(ACTIVE_SESSION_KEY, data.sessionId); } catch {}
     });
 
     newSocket.on('sessions_list', (data: { sessions: Session[] }) => {
-      setChatState(prev => {
-        const sessionsMap = { ...prev.sessions };
+      if (data.sessions.length > 0) {
+        const sessionsMap: Record<string, Session> = {};
         for (const session of data.sessions) {
           sessionsMap[session.id] = session;
         }
-        return { ...prev, sessions: sessionsMap };
-      });
+
+        let targetId = '';
+        try {
+          const saved = localStorage.getItem(ACTIVE_SESSION_KEY);
+          if (saved && sessionsMap[saved]) {
+            targetId = saved;
+          }
+        } catch {}
+
+        if (!targetId) {
+          const sorted = [...data.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+          targetId = sorted[0].id;
+        }
+
+        // 如果目标会话本来就是空的，直接复用，不创建新的
+        const targetSession = sessionsMap[targetId];
+        if (targetSession && targetSession.messages.length === 0) {
+          setChatState({ sessions: sessionsMap, activeSessionId: targetId });
+          // 空会话不需要 switch_session（已经在服务器上）
+        } else {
+          setChatState({ sessions: sessionsMap, activeSessionId: targetId });
+          newSocket.emit('switch_session', { sessionId: targetId });
+        }
+      } else {
+        // 服务器上没有会话，才创建新的
+        newSocket.emit('create_session');
+      }
     });
 
     newSocket.on('session_switched', (data: { sessionId: string; messages: Message[] }) => {
@@ -181,6 +210,7 @@ function App() {
 
     newSocket.on('session_deleted', (data: { sessionId: string; success: boolean }) => {
       if (!data.success) return;
+      let nextActiveId = '';
       let shouldCreateNew = false;
       setChatState(prev => {
         const nextSessions = { ...prev.sessions };
@@ -188,14 +218,19 @@ function App() {
         if (prev.activeSessionId === data.sessionId) {
           const remaining = Object.keys(nextSessions);
           if (remaining.length > 0) {
-            return { sessions: nextSessions, activeSessionId: remaining[0] };
+            nextActiveId = remaining[0];
+            try { localStorage.setItem(ACTIVE_SESSION_KEY, nextActiveId); } catch {}
+            return { sessions: nextSessions, activeSessionId: nextActiveId };
           }
           shouldCreateNew = true;
+          try { localStorage.removeItem(ACTIVE_SESSION_KEY); } catch {}
           return { sessions: nextSessions, activeSessionId: '' };
         }
         return { ...prev, sessions: nextSessions };
       });
-      if (shouldCreateNew) {
+      if (nextActiveId) {
+        newSocket.emit('switch_session', { sessionId: nextActiveId });
+      } else if (shouldCreateNew) {
         setTimeout(() => newSocket.emit('create_session'), 0);
       }
     });
@@ -294,6 +329,7 @@ function App() {
   };
 
   const handleSwitchSession = useCallback((sessionId: string) => {
+    try { localStorage.setItem(ACTIVE_SESSION_KEY, sessionId); } catch {}
     socket?.emit('switch_session', { sessionId });
   }, [socket]);
 
@@ -311,6 +347,7 @@ function App() {
     { id: 'services' as const, icon: Layers, label: '系统服务' },
     { id: 'system' as const, icon: Settings, label: '系统配置' },
     { id: 'optimize' as const, icon: Zap, label: '系统优化' },
+    { id: 'scheduled' as const, icon: Clock, label: '定时任务' },
     { id: 'skills' as const, icon: Puzzle, label: '技能市场' },
     { id: 'agents' as const, icon: Bot, label: 'Agent员工' },
   ];
@@ -321,6 +358,7 @@ function App() {
     services: { title: '服务管理', subtitle: '系统服务状态' },
     system: { title: '系统配置', subtitle: '镜像源与系统信息' },
     optimize: { title: '系统优化', subtitle: '一键性能调优' },
+    scheduled: { title: '定时任务', subtitle: '自动触发 AI 执行' },
     skills: { title: '技能市场', subtitle: '管理与安装技能' },
     agents: { title: 'AI 员工', subtitle: '自定义 AI 员工角色' },
   };
@@ -407,6 +445,7 @@ function App() {
           {activePanel === 'services' && <ServicesPanel />}
           {activePanel === 'system' && <SystemInfoPanel />}
           {activePanel === 'optimize' && <OptimizationPanel />}
+          {activePanel === 'scheduled' && <ScheduledTasksPanel />}
           {activePanel === 'skills' && <SkillMarketplace />}
           {activePanel === 'agents' && (
             <AgentPanel
