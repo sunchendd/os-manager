@@ -7,7 +7,7 @@ import { config, updateAIConfig, maskApiKey } from './config';
 import { AgentCore } from './agent/AgentCore';
 import { MockAgentCore } from './agent/MockAgentCore';
 import { SessionManager } from './agent/SessionManager';
-import { OpenCodeBridge, isOpenCodeAvailable } from './agent/OpenCodeBridge';
+import { OpenCodeBridge, isOpenCodeAvailable, getOpenCodeVersion } from './agent/OpenCodeBridge';
 
 import { SystemTools } from './tools/SystemTools';
 import { SystemDetector } from './tools/SystemDetector';
@@ -71,6 +71,24 @@ app.get('/api/health', (req, res) => {
     opencode: opencodeAvailable,
     timestamp: new Date().toISOString()
   });
+});
+
+// OpenCode 版本信息
+app.get('/api/opencode/version', (req, res) => {
+  const version = getOpenCodeVersion();
+  res.json({ available: opencodeAvailable, version });
+});
+
+// OpenCode 连接测试
+app.post('/api/opencode/test', (req, res) => {
+  if (!opencodeAvailable) {
+    return res.status(503).json({ success: false, error: 'Opencode CLI 未安装' });
+  }
+  const version = getOpenCodeVersion();
+  if (!version) {
+    return res.status(500).json({ success: false, error: '无法获取 Opencode 版本' });
+  }
+  res.json({ success: true, version });
 });
 
 // 系统信息

@@ -171,3 +171,18 @@ export function isOpenCodeAvailable(): boolean {
     return false;
   }
 }
+
+/** 获取 opencode CLI 版本号 */
+export function getOpenCodeVersion(): string | null {
+  try {
+    const { execSync } = require('child_process');
+    const version = execSync('opencode --version', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 5000,
+    }).trim();
+    return version || null;
+  } catch {
+    return null;
+  }
+}

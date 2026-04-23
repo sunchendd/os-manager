@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Cpu, Globe, Package, Bot, Key, Server, CheckCircle, AlertCircle } from 'lucide-react';
+import {
+  Cpu, Globe, Package, Terminal, CheckCircle, AlertCircle,
+  RefreshCw, Copy, ExternalLink
+} from 'lucide-react';
 
 interface OSInfo {
   id: string;
@@ -19,12 +22,12 @@ interface MirrorConfig {
   npm: string;
 }
 
-interface AIConfig {
-  apiKey: string;
-  baseURL: string;
-  model: string;
-  mode: 'deepseek' | 'mock';
+interface OpencodeStatus {
+  available: boolean;
+  version: string | null;
 }
+
+const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install.sh | bash';
 
 export const SystemInfoPanel: React.FC = () => {
   const [osInfo, setOsInfo] = useState<OSInfo | null>(null);
@@ -34,22 +37,18 @@ export const SystemInfoPanel: React.FC = () => {
   const [configuring, setConfiguring] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  // AI 配置状态
-  const [aiConfig, setAiConfig] = useState<AIConfig>({
-    apiKey: '',
-    baseURL: 'https://api.deepseek.com',
-    model: 'deepseek-chat',
-    mode: 'mock',
-  });
-  const [aiSaving, setAiSaving] = useState(false);
-  const [aiSaved, setAiSaved] = useState(false);
+  // OpenCode 状态
+  const [opencodeStatus, setOpencodeStatus] = useState<OpencodeStatus>({ available: false, version: null });
+  const [testingOpencode, setTestingOpencode] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [osRes, mirrorRes, aiRes] = await Promise.all([
+      const [osRes, mirrorRes, ocRes] = await Promise.all([
         fetch('/api/os-info').then(r => r.json()),
         fetch('/api/mirrors').then(r => r.json()),
-        fetch('/api/config/ai').then(r => r.json()),
+        fetch('/api/opencode/version').then(r => r.json()),
       ]);
       if (osRes.success) {
         setOsInfo(osRes.data.os);
@@ -58,8 +57,8 @@ export const SystemInfoPanel: React.FC = () => {
       if (mirrorRes.success) {
         setAvailableMirrors(mirrorRes.data);
       }
-      if (aiRes.success) {
-        setAiConfig(aiRes.data);
+      if (ocRes) {
+        setOpencodeStatus({ available: ocRes.available, version: ocRes.version });
       }
     } catch (e) {
       console.error(e);
@@ -91,30 +90,32 @@ export const SystemInfoPanel: React.FC = () => {
     }
   };
 
-  const handleSaveAIConfig = async () => {
-    setAiSaving(true);
-    setAiSaved(false);
+  const handleTestOpencode = async () => {
+    setTestingOpencode(true);
+    setTestResult(null);
     try {
-      const res = await fetch('/api/config/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: aiConfig.apiKey,
-          baseURL: aiConfig.baseURL,
-          model: aiConfig.model,
-        }),
-      });
+      const res = await fetch('/api/opencode/test', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        setAiConfig(data.data);
-        setAiSaved(true);
-        setTimeout(() => setAiSaved(false), 3000);
+        setTestResult(`✅ 连接成功，版本: ${data.version}`);
+      } else {
+        setTestResult(`❌ 测试失败: ${data.error}`);
       }
     } catch (e: any) {
-      console.error('保存 AI 配置失败:', e);
+      setTestResult(`❌ 测试失败: ${e.message}`);
     } finally {
-      setAiSaving(false);
+      setTestingOpencode(false);
     }
+  };
+
+  const handleCopyInstall = () => {
+    navigator.clipboard.writeText(INSTALL_COMMAND);
+    setCopied(true);
+    setTestResult('📋 安装命令已复制到剪贴板');
+    setTimeout(() => {
+      setCopied(false);
+      setTestResult(null);
+    }, 3000);
   };
 
   if (loading) {
@@ -159,100 +160,97 @@ export const SystemInfoPanel: React.FC = () => {
         </div>
       )}
 
-      {/* AI 配置卡片 */}
+      {/* OpenCode Agent 状态卡片 */}
       <div className="rounded-xl p-4 border theme-transition glass-card">
         <h3 className="text-sm font-medium mb-3 flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
-          <Bot className="w-4 h-4" style={{ color: 'var(--color-accent)' }} />
-          AI 大模型配置
-          {aiConfig.mode === 'deepseek' ? (
+          <Terminal className="w-4 h-4" style={{ color: 'var(--color-accent)' }} />
+          OpenCode Agent
+          {opencodeStatus.available ? (
             <span className="ml-auto flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
                   style={{ backgroundColor: 'var(--color-success-dim)', color: 'var(--color-success)' }}>
-              <CheckCircle className="w-3 h-3" /> DeepSeek 已启用
+              <CheckCircle className="w-3 h-3" /> 已安装
             </span>
           ) : (
             <span className="ml-auto flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
-                  style={{ backgroundColor: 'var(--color-warning-dim)', color: 'var(--color-warning)' }}>
-              <AlertCircle className="w-3 h-3" /> 演示模式
+                  style={{ backgroundColor: 'var(--color-error-dim)', color: 'var(--color-error)' }}>
+              <AlertCircle className="w-3 h-3" /> 未安装
             </span>
           )}
         </h3>
 
         <div className="space-y-3">
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: 'var(--color-text-muted)' }}>API Key</label>
-            <div className="relative">
-              <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
-              <input
-                type="password"
-                value={aiConfig.apiKey}
-                onChange={(e) => setAiConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-                placeholder={aiConfig.apiKey.includes('•') ? '已配置（修改请重新输入）' : '输入 DeepSeek API Key'}
-                className="w-full rounded-lg pl-10 pr-4 py-2.5 text-sm theme-transition"
-                style={{
-                  backgroundColor: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text-primary)',
-                }}
-              />
-            </div>
-            <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-muted)' }}>
-              当前: {aiConfig.apiKey || '未配置'}
-            </p>
-          </div>
-
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: 'var(--color-text-muted)' }}>Base URL</label>
-            <div className="relative">
-              <Server className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
-              <input
-                type="text"
-                value={aiConfig.baseURL}
-                onChange={(e) => setAiConfig(prev => ({ ...prev, baseURL: e.target.value }))}
-                placeholder="https://api.deepseek.com"
-                className="w-full rounded-lg pl-10 pr-4 py-2.5 text-sm theme-transition"
-                style={{
-                  backgroundColor: 'var(--color-bg)',
-                  border: '1px solid var(--color-border)',
-                  color: 'var(--color-text-primary)',
-                }}
-              />
+          {/* 版本信息 */}
+          <div className="p-3 rounded-lg theme-transition" style={{ backgroundColor: 'var(--color-bg)' }}>
+            <div className="text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>版本号</div>
+            <div className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+              <Terminal className="w-4 h-4" style={{ color: 'var(--color-accent)' }} />
+              {opencodeStatus.available && opencodeStatus.version
+                ? `v${opencodeStatus.version}`
+                : '—'}
             </div>
           </div>
 
-          <div>
-            <label className="text-xs mb-1 block" style={{ color: 'var(--color-text-muted)' }}>Model</label>
-            <input
-              type="text"
-              value={aiConfig.model}
-              onChange={(e) => setAiConfig(prev => ({ ...prev, model: e.target.value }))}
-              placeholder="deepseek-chat"
-              className="w-full rounded-lg px-4 py-2.5 text-sm theme-transition"
+          {/* 操作按钮 */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleTestOpencode}
+              disabled={testingOpencode || !opencodeStatus.available}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
               style={{
-                backgroundColor: 'var(--color-bg)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-primary)',
+                backgroundColor: 'var(--color-accent)',
+                color: 'var(--color-text-on-accent)',
               }}
-            />
+            >
+              {testingOpencode ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
+              {testingOpencode ? '测试中...' : '测试连接'}
+            </button>
+
+            {!opencodeStatus.available && (
+              <button
+                onClick={handleCopyInstall}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all"
+                style={{
+                  backgroundColor: 'var(--color-bg)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-primary)',
+                }}
+              >
+                {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? '已复制' : '复制安装命令'}
+              </button>
+            )}
           </div>
 
-          <button
-            onClick={handleSaveAIConfig}
-            disabled={aiSaving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
-            style={{
-              backgroundColor: aiSaved ? 'var(--color-success)' : 'var(--color-accent)',
-              color: 'var(--color-text-on-accent)',
-            }}
-          >
-            {aiSaving ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : aiSaved ? (
-              <CheckCircle className="w-4 h-4" />
-            ) : (
-              <Bot className="w-4 h-4" />
-            )}
-            {aiSaving ? '保存中...' : aiSaved ? '已保存' : '保存配置'}
-          </button>
+          {/* 安装命令提示 */}
+          {!opencodeStatus.available && (
+            <div className="p-3 rounded-lg text-xs font-mono whitespace-pre-wrap theme-transition"
+                 style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-secondary)' }}>
+              <div className="flex items-center justify-between mb-1">
+                <span style={{ color: 'var(--color-text-muted)' }}>安装命令</span>
+                <a href="https://opencode.ai" target="_blank" rel="noopener noreferrer"
+                   className="flex items-center gap-1 hover:underline"
+                   style={{ color: 'var(--color-accent)' }}>
+                  <ExternalLink className="w-3 h-3" /> 官网
+                </a>
+              </div>
+              {INSTALL_COMMAND}
+            </div>
+          )}
+
+          {/* 测试结果 */}
+          {testResult && (
+            <div className="p-3 rounded-lg text-xs whitespace-pre-wrap theme-transition"
+                 style={{
+                   backgroundColor: testResult.startsWith('✅') ? 'var(--color-success-dim)' : 'var(--color-error-dim)',
+                   color: testResult.startsWith('✅') ? 'var(--color-success)' : 'var(--color-error)',
+                 }}>
+              {testResult}
+            </div>
+          )}
         </div>
       </div>
 

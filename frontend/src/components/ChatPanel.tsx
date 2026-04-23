@@ -326,8 +326,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             <div className="flex flex-col items-center justify-center h-full text-[var(--color-text-secondary)] animate-fade-in">
               {/* Hero avatar */}
               <div className="relative mb-8">
-                <div className="w-24 h-24 bg-gradient-to-br from-[var(--color-accent)] to-[#ff8c5a] rounded-2xl flex items-center justify-center shadow-2xl shadow-[var(--color-accent-dim)] animate-float">
-                  <span className="text-5xl">🤖</span>
+                <div className="w-24 h-24 bg-gradient-to-br from-[var(--color-accent)] to-[var(--color-secondary)] rounded-2xl flex items-center justify-center shadow-2xl shadow-[var(--color-accent-dim)] animate-float">
+                  <Terminal className="w-12 h-12 text-white" strokeWidth={1.5} />
                 </div>
                 <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg flex items-center justify-center">
                   <Zap className="w-4 h-4 text-[var(--color-secondary)]" />
@@ -366,7 +366,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
               <div className="mt-8 flex items-center gap-2 text-[11px] text-[var(--color-text-muted)] uppercase tracking-widest font-medium">
                 <span className="w-6 h-px bg-[var(--color-border-hover)]" />
-                已接入 DeepSeek AI · 支持语音输入
+                已接入 OpenCode Agent · 支持语音输入
                 <span className="w-6 h-px bg-[var(--color-border-hover)]" />
               </div>
             </div>
