@@ -9,8 +9,9 @@ import { OptimizationPanel } from './components/OptimizationPanel';
 import { SkillMarketplace } from './components/SkillMarketplace';
 import { ServicesPanel } from './components/ServicesPanel';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
+import { AgentPanel } from './components/AgentPanel';
 import {
-  Server, Terminal, Settings, Zap, Puzzle, Layers
+  Server, Terminal, Settings, Zap, Puzzle, Layers, Bot
 } from 'lucide-react';
 
 export interface OpenCodeEvent {
@@ -34,12 +35,24 @@ function App() {
     show: boolean;
     assessment: RiskAssessment | null;
   }>({ show: false, assessment: null });
-  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services'>('chat');
+  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services' | 'agents'>('chat');
 
   // Opencode 状态
   const [opencodeAvailable, setOpencodeAvailable] = useState(false);
-  const [useOpencode, setUseOpencode] = useState(false);
   const [opencodeStreams, setOpencodeStreams] = useState<Record<string, OpenCodeEvent[]>>({});
+
+  // Agent 状态
+  interface AgentConfig {
+    id: string;
+    name: string;
+    description: string;
+    instructions: string;
+    model: string;
+    skills: string[];
+    environment: Record<string, string>;
+  }
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
 
   const activeMessages = chatState.activeSessionId
     ? chatState.sessions[chatState.activeSessionId]?.messages || []
@@ -217,7 +230,7 @@ function App() {
     };
   }, []);
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = (content: string, agentId?: string) => {
     if (!socket || !chatState.activeSessionId) return;
 
     const userMsg: Message = {
@@ -242,12 +255,26 @@ function App() {
       };
     });
 
-    if (useOpencode && opencodeAvailable) {
-      socket.emit('send_message_opencode', { sessionId: chatState.activeSessionId, message: content });
+    if (opencodeAvailable) {
+      socket.emit('send_message_opencode', {
+        sessionId: chatState.activeSessionId,
+        message: content,
+        agentId: agentId || null,
+      });
     } else {
       socket.emit('send_message', { sessionId: chatState.activeSessionId, message: content });
     }
   };
+
+  // 加载 Agents
+  useEffect(() => {
+    fetch('/api/agents')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setAgents(data.data);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleRiskResponse = (confirmed: boolean) => {
     if (socket) {
@@ -281,15 +308,17 @@ function App() {
     { id: 'system' as const, icon: Settings, label: '系统' },
     { id: 'optimize' as const, icon: Zap, label: '优化' },
     { id: 'skills' as const, icon: Puzzle, label: '技能' },
+    { id: 'agents' as const, icon: Bot, label: 'Agent' },
   ];
 
   const panelTitles: Record<string, { title: string; subtitle: string }> = {
     chat: { title: '智能对话', subtitle: '自然语言管理服务器' },
-    dashboard: { title: '系统监控', subtitle: '实时系统状态' },
-    services: { title: '系统服务', subtitle: '管理系统服务状态' },
+    dashboard: { title: '系统监控', subtitle: '实时性能指标' },
+    services: { title: '服务管理', subtitle: '系统服务状态' },
     system: { title: '系统配置', subtitle: '镜像源与系统信息' },
-    optimize: { title: '系统优化', subtitle: '一键优化与安全加固' },
-    skills: { title: '技能市场', subtitle: '扩展AI能力' },
+    optimize: { title: '系统优化', subtitle: '一键性能调优' },
+    skills: { title: '技能市场', subtitle: '管理与安装技能' },
+    agents: { title: 'Agent 人设', subtitle: '自定义智能代理角色' },
   };
 
   return (
@@ -366,10 +395,10 @@ function App() {
               onCreateSession={handleCreateSession}
               onDeleteSession={handleDeleteSession}
               onClearSession={handleClearChat}
-              opencodeAvailable={opencodeAvailable}
-              useOpencode={useOpencode}
-              setUseOpencode={setUseOpencode}
               opencodeStream={activeStream}
+              agents={agents}
+              activeAgentId={activeAgentId}
+              onSelectAgent={setActiveAgentId}
             />
           )}
           {activePanel === 'dashboard' && <SystemDashboard socket={socket} />}
@@ -377,6 +406,12 @@ function App() {
           {activePanel === 'system' && <SystemInfoPanel />}
           {activePanel === 'optimize' && <OptimizationPanel />}
           {activePanel === 'skills' && <SkillMarketplace />}
+          {activePanel === 'agents' && (
+            <AgentPanel
+              agents={agents}
+              onAgentsChange={setAgents}
+            />
+          )}
         </div>
       </div>
 

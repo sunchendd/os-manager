@@ -26,15 +26,27 @@ export class OpenCodeBridge extends EventEmitter {
 
   /**
    * 执行用户输入，实时 emit OpenCodeEvent
+   * @param userInput 用户输入
+   * @param agentConfig 可选的 Agent 配置（model, instructions 等）
    * @returns 最终 AI 回复文本
    */
-  async run(userInput: string): Promise<string> {
+  async run(userInput: string, agentConfig?: { model?: string; instructions?: string; environment?: Record<string, string> }): Promise<string> {
     return new Promise((resolve, reject) => {
-      // opencode 需要 TTY 环境，使用 script 命令创建伪终端
-      const command = `opencode run --format json ${JSON.stringify(userInput)}`;
+      // 构建 opencode run 命令
+      const args = ['run', '--format', 'json'];
+      if (agentConfig?.model) {
+        args.push('--model', agentConfig.model);
+      }
+      // 如果有 instructions，作为系统提示词前置
+      const effectiveInput = agentConfig?.instructions
+        ? `[System Instructions]\n${agentConfig.instructions}\n\n[User Input]\n${userInput}`
+        : userInput;
+      args.push(effectiveInput);
+
+      const command = 'opencode ' + args.map(a => JSON.stringify(a)).join(' ');
       const options: SpawnOptions = {
         cwd: process.cwd(),
-        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1', ...(agentConfig?.environment || {}) },
       };
 
       this.proc = spawn('script', ['-q', '/dev/null', '-c', command], options);

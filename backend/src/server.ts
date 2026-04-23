@@ -8,6 +8,7 @@ import { AgentCore } from './agent/AgentCore';
 import { MockAgentCore } from './agent/MockAgentCore';
 import { SessionManager } from './agent/SessionManager';
 import { OpenCodeBridge, isOpenCodeAvailable, getOpenCodeVersion } from './agent/OpenCodeBridge';
+import { AgentManager } from './agent/AgentManager';
 
 import { SystemTools } from './tools/SystemTools';
 import { SystemDetector } from './tools/SystemDetector';
@@ -47,8 +48,10 @@ function createAgent() {
 
 let agent = createAgent();
 const opencodeAvailable = isOpenCodeAvailable();
+const agentManager = new AgentManager();
 console.log(`🤖 AI模式: ${isRealAIEnabled() ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
 console.log(`🔌 Opencode Agent: ${opencodeAvailable ? '已安装' : '未安装'}`);
+console.log(`🎭 Agents: ${agentManager.list().length} 个已配置`);
 
 function reinitAgent() {
   const wasReal = agent instanceof AgentCore;
@@ -126,6 +129,59 @@ app.get('/api/processes', async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// Agent 管理 API
+app.get('/api/agents', (req, res) => {
+  res.json({ success: true, data: agentManager.list() });
+});
+
+app.get('/api/agents/:id', (req, res) => {
+  const agent = agentManager.get(req.params.id);
+  if (!agent) {
+    return res.status(404).json({ success: false, error: 'Agent 不存在' });
+  }
+  res.json({ success: true, data: agent });
+});
+
+app.post('/api/agents', (req, res) => {
+  try {
+    const { name, description, instructions, model, skills, environment } = req.body;
+    if (!name || !instructions) {
+      return res.status(400).json({ success: false, error: '名称和指令不能为空' });
+    }
+    const agent = agentManager.create({
+      name,
+      description: description || '',
+      instructions,
+      model: model || '',
+      skills: skills || [],
+      environment: environment || {},
+    });
+    res.json({ success: true, data: agent });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.put('/api/agents/:id', (req, res) => {
+  try {
+    const agent = agentManager.update(req.params.id, req.body);
+    if (!agent) {
+      return res.status(404).json({ success: false, error: 'Agent 不存在' });
+    }
+    res.json({ success: true, data: agent });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.delete('/api/agents/:id', (req, res) => {
+  const success = agentManager.delete(req.params.id);
+  if (!success) {
+    return res.status(404).json({ success: false, error: 'Agent 不存在' });
+  }
+  res.json({ success: true });
 });
 
 // 聚合仪表盘数据接口（解决加载慢问题）
@@ -398,13 +454,13 @@ io.on('connection', (socket) => {
   });
 
   // Opencode Agent 流式执行
-  socket.on('send_message_opencode', async (data: { sessionId: string; message: string }) => {
+  socket.on('send_message_opencode', async (data: { sessionId: string; message: string; agentId?: string | null }) => {
     if (!opencodeAvailable) {
       socket.emit('error', { message: 'Opencode Agent 未安装，请先安装 opencode CLI' });
       return;
     }
 
-    const { sessionId, message } = data;
+    const { sessionId, message, agentId } = data;
 
     // 保存用户消息到会话
     const userMsg = {
@@ -438,8 +494,18 @@ io.on('connection', (socket) => {
       }
     });
 
+    // 获取 Agent 配置
+    const agentConfig = agentId ? agentManager.get(agentId) : undefined;
+    const bridgeOptions = agentConfig
+      ? {
+          model: agentConfig.model || undefined,
+          instructions: agentConfig.instructions || undefined,
+          environment: agentConfig.environment || undefined,
+        }
+      : undefined;
+
     try {
-      finalText = await bridge.run(message);
+      finalText = await bridge.run(message, bridgeOptions);
     } catch (error: any) {
       socket.emit('opencode_event', {
         sessionId,

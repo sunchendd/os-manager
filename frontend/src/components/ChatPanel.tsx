@@ -8,20 +8,30 @@ import {
   Plus, Trash2, MessageSquare, Bot, Terminal
 } from 'lucide-react';
 
+interface AgentConfig {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  model: string;
+  skills: string[];
+  environment: Record<string, string>;
+}
+
 interface ChatPanelProps {
   sessions: Record<string, Session>;
   activeSessionId: string;
   messages: Message[];
   isTyping: boolean;
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, agentId?: string) => void;
   onSwitchSession: (sessionId: string) => void;
   onCreateSession: () => void;
   onDeleteSession: (sessionId: string) => void;
   onClearSession: () => void;
-  opencodeAvailable: boolean;
-  useOpencode: boolean;
-  setUseOpencode: (v: boolean) => void;
   opencodeStream: OpenCodeEvent[];
+  agents: AgentConfig[];
+  activeAgentId: string | null;
+  onSelectAgent: (agentId: string | null) => void;
 }
 
 const TTS_KEY = 'os-manager-tts-enabled';
@@ -69,10 +79,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onCreateSession,
   onDeleteSession,
   onClearSession,
-  opencodeAvailable,
-  useOpencode,
-  setUseOpencode,
   opencodeStream,
+  agents,
+  activeAgentId,
+  onSelectAgent,
 }) => {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -93,7 +103,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isTyping) return;
-    onSendMessage(input.trim());
+    onSendMessage(input.trim(), activeAgentId || undefined);
     setInput('');
     setVoiceError(null);
   };
@@ -204,7 +214,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         recognitionRef.current = null;
         const text = finalTranscriptRef.current.trim();
         if (text && !isTyping) {
-          onSendMessage(input.trim() || text);
+          onSendMessage(input.trim() || text, activeAgentId || undefined);
           setInput('');
         }
         finalTranscriptRef.current = '';
@@ -507,20 +517,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
               </button>
             )}
 
-            {opencodeAvailable && (
-              <button
-                type="button"
-                onClick={() => setUseOpencode(!useOpencode)}
-                className={`p-3 rounded-xl transition-all duration-300 flex items-center gap-1.5 text-xs font-medium ${
-                  useOpencode
-                    ? 'bg-[var(--color-accent-dim)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25 border border-[var(--color-accent)]/30'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surface-hover)] border border-transparent'
-                }`}
-                title={useOpencode ? '使用 Opencode Agent' : '使用 DeepSeek Agent'}
-              >
-                {useOpencode ? <Bot className="w-4 h-4" /> : <Terminal className="w-4 h-4" />}
-                <span className="hidden sm:inline">{useOpencode ? 'Opencode' : 'DeepSeek'}</span>
-              </button>
+            {/* Agent 选择器 */}
+            {agents.length > 0 && (
+              <div className="relative">
+                <select
+                  value={activeAgentId || ''}
+                  onChange={(e) => onSelectAgent(e.target.value || null)}
+                  className="appearance-none bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl pl-3 pr-8 py-3 text-xs font-medium text-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)]/50 cursor-pointer"
+                  title="选择 Agent"
+                >
+                  <option value="">默认 Agent</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>{agent.name}</option>
+                  ))}
+                </select>
+                <Terminal className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--color-text-muted)] pointer-events-none" />
+              </div>
             )}
 
             <div className="flex-1 relative">
