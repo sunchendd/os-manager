@@ -25,7 +25,8 @@ export class MockAgentCore {
   async processMessage(
     sessionId: string,
     userInput: string,
-    onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>
+    onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>,
+    _agentConfig?: { instructions?: string; skills?: string[] }
   ): Promise<Message[]> {
     const session = this.sessionManager.getSession(sessionId);
     if (!session) {

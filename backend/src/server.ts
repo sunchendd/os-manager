@@ -415,11 +415,16 @@ io.on('connection', (socket) => {
     socket.emit('session_created', { sessionId: session.id });
   });
 
-  socket.on('send_message', async (data: { sessionId: string; message: string }) => {
+  socket.on('send_message', async (data: { sessionId: string; message: string; agentId?: string | null }) => {
     try {
-      const { sessionId, message } = data;
+      const { sessionId, message, agentId } = data;
 
       socket.emit('typing', { sessionId, typing: true });
+
+      const agentConfig = agentId ? agentManager.get(agentId) : undefined;
+      const processConfig = agentConfig
+        ? { instructions: agentConfig.instructions, skills: agentConfig.skills }
+        : undefined;
 
       const messages = await agent.processMessage(sessionId, message, async (risk) => {
         return new Promise((resolve) => {
@@ -434,7 +439,7 @@ io.on('connection', (socket) => {
 
           setTimeout(() => resolve(false), 30000);
         });
-      });
+      }, processConfig);
 
       socket.emit('typing', { sessionId, typing: false });
 
@@ -496,10 +501,26 @@ io.on('connection', (socket) => {
 
     // 获取 Agent 配置
     const agentConfig = agentId ? agentManager.get(agentId) : undefined;
+
+    // 构建 instructions，注入绑定的 skills 内容
+    let effectiveInstructions = agentConfig?.instructions || '';
+    if (agentConfig?.skills && agentConfig.skills.length > 0) {
+      const skillContents: string[] = [];
+      for (const skillId of agentConfig.skills) {
+        const skill = agent.getSkillRegistry().getSkill(skillId);
+        if (skill) {
+          skillContents.push(`\n==== Skill: ${skill.name} ====\n${skill.content}`);
+        }
+      }
+      if (skillContents.length > 0) {
+        effectiveInstructions += `\n\n===== 已绑定技能 =====\n${skillContents.join('\n')}\n======================`;
+      }
+    }
+
     const bridgeOptions = agentConfig
       ? {
           model: agentConfig.model || undefined,
-          instructions: agentConfig.instructions || undefined,
+          instructions: effectiveInstructions || undefined,
           environment: agentConfig.environment || undefined,
         }
       : undefined;

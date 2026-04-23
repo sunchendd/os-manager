@@ -214,7 +214,7 @@ export const SkillMarketplace: React.FC = () => {
               技能市场
             </h2>
             <p className="text-xs text-[var(--color-text-muted)] mt-1 font-medium">
-              管理 AI Agent 的技能，支持 opencode 生态和 GitHub 安装
+              管理 AI 员工的技能，支持 opencode 生态和 GitHub 安装
             </p>
           </div>
           <div className="text-[11px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider">

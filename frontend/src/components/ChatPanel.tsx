@@ -376,7 +376,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
               <div className="mt-8 flex items-center gap-2 text-[11px] text-[var(--color-text-muted)] uppercase tracking-widest font-medium">
                 <span className="w-6 h-px bg-[var(--color-border-hover)]" />
-                已接入 OpenCode Agent · 支持语音输入
+                已接入 OpenCode · 支持语音输入
                 <span className="w-6 h-px bg-[var(--color-border-hover)]" />
               </div>
             </div>
@@ -401,7 +401,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                  style={{ borderColor: 'var(--color-accent)', backgroundColor: 'var(--color-accent-dim)' }}>
               <div className="flex items-center gap-2 text-sm font-bold" style={{ color: 'var(--color-accent)' }}>
                 <Bot className="w-4 h-4" />
-                Opencode Agent 执行中
+                Opencode 执行中
                 <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" />
               </div>
               <div className="space-y-1.5 max-h-60 overflow-y-auto">
@@ -524,9 +524,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                   value={activeAgentId || ''}
                   onChange={(e) => onSelectAgent(e.target.value || null)}
                   className="appearance-none bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl pl-3 pr-8 py-3 text-xs font-medium text-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)]/50 cursor-pointer"
-                  title="选择 Agent"
+                  title="选择 AI 员工"
                 >
-                  <option value="">默认 Agent</option>
+                  <option value="">默认员工</option>
                   {agents.map((agent) => (
                     <option key={agent.id} value={agent.id}>{agent.name}</option>
                   ))}

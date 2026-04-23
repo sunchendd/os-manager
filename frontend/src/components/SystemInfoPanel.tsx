@@ -160,11 +160,11 @@ export const SystemInfoPanel: React.FC = () => {
         </div>
       )}
 
-      {/* OpenCode Agent 状态卡片 */}
+      {/* OpenCode 状态卡片 */}
       <div className="rounded-xl p-4 border theme-transition glass-card">
         <h3 className="text-sm font-medium mb-3 flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
           <Terminal className="w-4 h-4" style={{ color: 'var(--color-accent)' }} />
-          OpenCode Agent
+          OpenCode
           {opencodeStatus.available ? (
             <span className="ml-auto flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
                   style={{ backgroundColor: 'var(--color-success-dim)', color: 'var(--color-success)' }}>

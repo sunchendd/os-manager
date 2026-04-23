@@ -262,7 +262,11 @@ function App() {
         agentId: agentId || null,
       });
     } else {
-      socket.emit('send_message', { sessionId: chatState.activeSessionId, message: content });
+      socket.emit('send_message', {
+        sessionId: chatState.activeSessionId,
+        message: content,
+        agentId: agentId || null,
+      });
     }
   };
 
@@ -302,13 +306,13 @@ function App() {
   }, [socket]);
 
   const navItems = [
-    { id: 'chat' as const, icon: Server, label: '对话' },
-    { id: 'dashboard' as const, icon: Terminal, label: '监控' },
-    { id: 'services' as const, icon: Layers, label: '服务' },
-    { id: 'system' as const, icon: Settings, label: '系统' },
-    { id: 'optimize' as const, icon: Zap, label: '优化' },
-    { id: 'skills' as const, icon: Puzzle, label: '技能' },
-    { id: 'agents' as const, icon: Bot, label: 'Agent' },
+    { id: 'chat' as const, icon: Server, label: '智能对话' },
+    { id: 'dashboard' as const, icon: Terminal, label: '系统监控' },
+    { id: 'services' as const, icon: Layers, label: '系统服务' },
+    { id: 'system' as const, icon: Settings, label: '系统配置' },
+    { id: 'optimize' as const, icon: Zap, label: '系统优化' },
+    { id: 'skills' as const, icon: Puzzle, label: '技能市场' },
+    { id: 'agents' as const, icon: Bot, label: 'Agent员工' },
   ];
 
   const panelTitles: Record<string, { title: string; subtitle: string }> = {
@@ -318,13 +322,13 @@ function App() {
     system: { title: '系统配置', subtitle: '镜像源与系统信息' },
     optimize: { title: '系统优化', subtitle: '一键性能调优' },
     skills: { title: '技能市场', subtitle: '管理与安装技能' },
-    agents: { title: 'Agent 人设', subtitle: '自定义智能代理角色' },
+    agents: { title: 'AI 员工', subtitle: '自定义 AI 员工角色' },
   };
 
   return (
     <div className="flex h-screen theme-transition" style={{ backgroundColor: 'var(--color-bg)' }}>
       {/* 侧边栏 */}
-      <div className="w-16 flex flex-col items-center py-4 border-r theme-transition"
+      <div className="w-[72px] flex flex-col items-center py-4 border-r theme-transition"
            style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <div className="mb-6">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center theme-transition"
@@ -337,7 +341,7 @@ function App() {
             <button
               key={item.id}
               onClick={() => setActivePanel(item.id)}
-              className={`p-3 rounded-xl transition-all relative group ${
+              className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-all relative group ${
                 activePanel === item.id
                   ? 'shadow-lg'
                   : 'hover:opacity-100 opacity-70'
@@ -349,9 +353,7 @@ function App() {
               title={item.label}
             >
               <item.icon className="w-5 h-5" />
-              {/* Tooltip */}
-              <span className="absolute left-full ml-2 px-2 py-1 text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 border"
-                    style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text-primary)', borderColor: 'var(--color-border)' }}>
+              <span className="text-[10px] font-medium leading-tight text-center whitespace-nowrap">
                 {item.label}
               </span>
             </button>
