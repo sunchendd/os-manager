@@ -1,13 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Message } from '../../../shared/types';
+import { Message, Session } from '../../../shared/types';
 import { MessageBubble } from './MessageBubble';
 import { SmartResult } from './SmartResult';
-import { Send, Mic, MicOff, Loader2, Activity, Shield, Zap, Volume2, VolumeX } from 'lucide-react';
+import { Send, Mic, MicOff, Loader2, Activity, Shield, Zap, Volume2, VolumeX, Plus, Trash2, MessageSquare } from 'lucide-react';
 
 interface ChatPanelProps {
+  sessions: Record<string, Session>;
+  activeSessionId: string;
   messages: Message[];
   isTyping: boolean;
   onSendMessage: (content: string) => void;
+  onSwitchSession: (sessionId: string) => void;
+  onCreateSession: () => void;
+  onDeleteSession: (sessionId: string) => void;
+  onClearSession: () => void;
 }
 
 const TTS_KEY = 'os-manager-tts-enabled';
@@ -28,15 +34,33 @@ const setTTSEnabled = (v: boolean) => {
   } catch { /* ignore */ }
 };
 
-// 检查浏览器是否支持语音识别
 const isSpeechSupported = (): boolean => {
   return !!(window as any).webkitSpeechRecognition || !!(window as any).SpeechRecognition;
 };
 
+const getSessionTitle = (session: Session): string => {
+  const firstUserMsg = session.messages.find(m => m.role === 'user');
+  if (firstUserMsg) {
+    return firstUserMsg.content.slice(0, 18) + (firstUserMsg.content.length > 18 ? '...' : '');
+  }
+  return '新会话';
+};
+
+const formatTime = (ts: number): string => {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
 export const ChatPanel: React.FC<ChatPanelProps> = ({
+  sessions,
+  activeSessionId,
   messages,
   isTyping,
   onSendMessage,
+  onSwitchSession,
+  onCreateSession,
+  onDeleteSession,
+  onClearSession,
 }) => {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -166,7 +190,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       recognition.onend = () => {
         setIsListening(false);
         recognitionRef.current = null;
-        // 语音识别结束后，如果有识别到内容，自动发送
         const text = finalTranscriptRef.current.trim();
         if (text && !isTyping) {
           onSendMessage(input.trim() || text);
@@ -182,7 +205,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     }
   };
 
-  // 场景快捷入口
+  const handleDelete = (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    onDeleteSession(sessionId);
+  };
+
   const scenarios = [
     {
       icon: <Activity className="w-4 h-4" />,
@@ -205,136 +232,232 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-500">
-            <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-indigo-500/20">
-              <span className="text-4xl">🤖</span>
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-2">
-              OS 智能代理
-            </h3>
-            <p className="text-sm text-slate-400 text-center max-w-md mb-8">
-              告别记忆复杂命令，用自然语言管理Linux服务器
-            </p>
-
-            {/* 痛点场景入口 */}
-            <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
-              {scenarios.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => onSendMessage(s.prompt)}
-                  className="flex items-center gap-3 p-4 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 hover:border-indigo-500/50 rounded-xl transition-all text-left group"
-                >
-                  <div className="w-10 h-10 bg-indigo-500/20 rounded-lg flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-500 transition-colors">
-                    {s.icon}
-                  </div>
-                  <div>
-                    <div className="font-medium text-slate-200 group-hover:text-white">{s.title}</div>
-                    <div className="text-xs text-slate-500">{s.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-6 text-xs text-slate-600">
-              已接入 DeepSeek AI • 支持语音输入
-            </div>
-          </div>
-        )}
-
-        {messages.map((message) => (
-          <div key={message.id}>
-            <MessageBubble message={message} />
-            {/* 为assistant消息添加智能分析展示 */}
-            {message.role === 'assistant' && message.content && (
-              <SmartResult content={message.content} />
-            )}
-          </div>
-        ))}
-
-        {isTyping && (
-          <div className="flex items-center gap-3 text-slate-400 bg-slate-800/50 w-fit px-4 py-2 rounded-full">
-            <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-            <span className="text-sm">AI正在分析...</span>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* 输入框 */}
-      <form
-        onSubmit={handleSubmit}
-        className="border-t border-slate-700 p-4 bg-slate-800/95 backdrop-blur"
-      >
-        {voiceError && (
-          <div className="mb-2 px-3 py-1.5 bg-red-900/30 border border-red-700/50 rounded-lg text-xs text-red-300 flex items-center gap-2">
-            <span>⚠️</span>
-            {voiceError}
-            <button
-              type="button"
-              onClick={() => setVoiceError(null)}
-              className="ml-auto text-red-400 hover:text-red-200"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        <div className="flex items-center gap-2">
+    <div className="flex h-full">
+      {/* Session Sidebar */}
+      <div className="w-[220px] bg-[#0b1120] border-r border-slate-800 flex flex-col flex-shrink-0">
+        <div className="p-3 border-b border-slate-800">
           <button
-            type="button"
-            onClick={handleVoiceInput}
-            className={`p-3 rounded-xl transition-all ${
-              isListening
-                ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 animate-pulse'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700'
-            }`}
-            title={isListening ? '点击停止录音' : '语音输入'}
+            onClick={onCreateSession}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
           >
-            {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
-          </button>
-          {isTTSSupported() && (
-            <button
-              type="button"
-              onClick={toggleTTS}
-              className={`p-3 rounded-xl transition-all ${
-                ttsEnabled
-                  ? 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
-              }`}
-              title={ttsEnabled ? '语音播报已开启' : '语音播报已关闭'}
-            >
-              {ttsEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-            </button>
-          )}
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? '正在聆听...' : '输入指令或问题，例如：查看磁盘使用情况'}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 transition-all"
-            />
-            {isListening && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
-                <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            )}
-          </div>
-          <button
-            type="submit"
-            disabled={!input.trim() || isTyping}
-            className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/40"
-          >
-            <Send className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
+            新建会话
           </button>
         </div>
-      </form>
+        
+        <div className="flex-1 overflow-y-auto py-2 space-y-0.5">
+          {Object.values(sessions)
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map((session) => {
+              const isActive = session.id === activeSessionId;
+              return (
+                <div
+                  key={session.id}
+                  onClick={() => onSwitchSession(session.id)}
+                  className={`group relative mx-2 px-3 py-2.5 rounded-lg cursor-pointer border-l-2 transition-all ${
+                    isActive
+                      ? 'bg-slate-800/80 border-indigo-500'
+                      : 'border-transparent hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-sm font-medium truncate ${
+                        isActive ? 'text-indigo-300' : 'text-slate-300'
+                      }`}>
+                        {getSessionTitle(session)}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {formatTime(session.updatedAt)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => handleDelete(e, session.id)}
+                      className={`p-1 rounded-md transition-all ${
+                        isActive
+                          ? 'text-slate-400 hover:text-red-400 hover:bg-red-400/10'
+                          : 'text-slate-600 hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100'
+                      }`}
+                      title="删除会话"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            
+          {Object.keys(sessions).length === 0 && (
+            <div className="px-4 py-8 text-center text-slate-600 text-sm">
+              <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              暂无会话
+            </div>
+          )}
+        </div>
+        
+        <div className="p-3 border-t border-slate-800">
+          <button
+            onClick={onClearSession}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-slate-400 hover:text-red-400 hover:bg-slate-800/50 text-sm rounded-lg transition-colors"
+          >
+            <Shield className="w-4 h-4" />
+            清除对话
+          </button>
+        </div>
+      </div>
+
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-[var(--color-text-secondary)] animate-fade-in">
+              {/* Hero avatar */}
+              <div className="relative mb-8">
+                <div className="w-24 h-24 bg-gradient-to-br from-[var(--color-accent)] to-[#ff8c5a] rounded-2xl flex items-center justify-center shadow-2xl shadow-[var(--color-accent-dim)] animate-float">
+                  <span className="text-5xl">🤖</span>
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-[var(--color-secondary)]" />
+                </div>
+              </div>
+
+              <h3 className="text-3xl font-extrabold text-[var(--color-text-primary)] mb-2 tracking-tight">
+                OS 智能代理
+              </h3>
+              <p className="text-sm text-[var(--color-text-muted)] text-center max-w-md mb-10 leading-relaxed">
+                告别记忆复杂命令，用自然语言管理 Linux 服务器
+              </p>
+
+              {/* Scenario cards */}
+              <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
+                {scenarios.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => onSendMessage(s.prompt)}
+                    className="group flex items-center gap-4 p-4 bg-[var(--color-surface)] border border-[var(--color-border)] hover:border-[var(--color-accent)]/40 rounded-xl transition-all duration-300 text-left relative overflow-hidden"
+                    style={{ animationDelay: `${i * 80}ms` }}
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-[var(--color-accent-dim)] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    <div className="w-11 h-11 bg-[var(--color-accent-dim)] rounded-xl flex items-center justify-center text-[var(--color-accent)] group-hover:bg-[var(--color-accent)] group-hover:text-white transition-all duration-300 relative z-10">
+                      {s.icon}
+                    </div>
+                    <div className="relative z-10">
+                      <div className="font-semibold text-[var(--color-text-primary)] group-hover:text-white transition-colors">
+                        {s.title}
+                      </div>
+                      <div className="text-xs text-[var(--color-text-muted)]">{s.desc}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-8 flex items-center gap-2 text-[11px] text-[var(--color-text-muted)] uppercase tracking-widest font-medium">
+                <span className="w-6 h-px bg-[var(--color-border-hover)]" />
+                已接入 DeepSeek AI · 支持语音输入
+                <span className="w-6 h-px bg-[var(--color-border-hover)]" />
+              </div>
+            </div>
+          )}
+
+          {messages.map((message, idx) => (
+            <div
+              key={message.id}
+              className="animate-fade-in-up"
+              style={{ animationDelay: `${Math.min(idx * 30, 300)}ms` }}
+            >
+              <MessageBubble message={message} />
+              {message.role === 'assistant' && message.content && (
+                <SmartResult content={message.content} />
+              )}
+            </div>
+          ))}
+
+          {isTyping && (
+            <div className="flex items-center gap-3 text-[var(--color-text-muted)] bg-[var(--color-surface)] w-fit px-5 py-2.5 rounded-full border border-[var(--color-border)]">
+              <Loader2 className="w-4 h-4 animate-spin text-[var(--color-accent)]" />
+              <span className="text-sm font-medium">AI 正在分析...</span>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input area */}
+        <form
+          onSubmit={handleSubmit}
+          className="border-t border-[var(--color-border)] p-4 bg-[var(--color-surface)]/90 backdrop-blur-xl relative z-20"
+        >
+          {voiceError && (
+            <div className="mb-3 px-3 py-2 bg-[var(--color-danger-dim)] border border-[var(--color-danger)]/20 rounded-lg text-xs text-[var(--color-danger)] flex items-center gap-2">
+              <span>⚠️</span>
+              {voiceError}
+              <button
+                type="button"
+                onClick={() => setVoiceError(null)}
+                className="ml-auto text-[var(--color-danger)] hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleVoiceInput}
+              className={`p-3 rounded-xl transition-all duration-300 ${
+                isListening
+                  ? 'bg-[var(--color-danger)] text-white shadow-lg shadow-red-500/20 animate-pulse'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surface-hover)]'
+              }`}
+              title={isListening ? '点击停止录音' : '语音输入'}
+            >
+              {isListening ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5" />}
+            </button>
+
+            {isTTSSupported() && (
+              <button
+                type="button"
+                onClick={toggleTTS}
+                className={`p-3 rounded-xl transition-all duration-300 ${
+                  ttsEnabled
+                    ? 'bg-[var(--color-accent-dim)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surface-hover)]'
+                }`}
+                title={ttsEnabled ? '语音播报已开启' : '语音播报已关闭'}
+              >
+                {ttsEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+              </button>
+            )}
+
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={isListening ? '正在聆听...' : '输入指令或问题，例如：查看磁盘使用情况'}
+                className="w-full bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl px-4 py-3 text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 focus:ring-1 focus:ring-[var(--color-accent)]/20 transition-all text-sm"
+              />
+              {isListening && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                  <span className="w-1.5 h-1.5 bg-[var(--color-danger)] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 bg-[var(--color-danger)] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 bg-[var(--color-danger)] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={!input.trim() || isTyping}
+              className="p-3 accent-btn rounded-xl disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

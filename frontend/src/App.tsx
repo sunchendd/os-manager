@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Message, RiskAssessment } from '../../shared/types';
+import { Message, RiskAssessment, Session } from '../../shared/types';
 import { ChatPanel } from './components/ChatPanel';
 import { RiskConfirmModal } from './components/RiskConfirmModal';
 import { SystemDashboard } from './components/SystemDashboard';
@@ -9,44 +9,26 @@ import { OptimizationPanel } from './components/OptimizationPanel';
 import { SkillMarketplace } from './components/SkillMarketplace';
 import { ServicesPanel } from './components/ServicesPanel';
 import { 
-  Server, Shield, Terminal, Settings, Zap, Puzzle, Layers
+  Server, Terminal, Settings, Zap, Puzzle, Layers
 } from 'lucide-react';
-
-
-const STORAGE_KEY = 'os-manager-chat-history';
-
-function loadHistory(): Message[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch { /* ignore */ }
-  return [];
-}
-
-function saveHistory(messages: Message[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-  } catch { /* ignore */ }
-}
 
 function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [sessionId, setSessionId] = useState<string>('');
-  const [messages, setMessages] = useState<Message[]>(loadHistory);
-  const [isTyping, setIsTyping] = useState(false);
+  const [chatState, setChatState] = useState<{
+    sessions: Record<string, Session>;
+    activeSessionId: string;
+  }>({ sessions: {}, activeSessionId: '' });
+  const [typingSessions, setTypingSessions] = useState<Record<string, boolean>>({});
   const [riskConfirm, setRiskConfirm] = useState<{
     show: boolean;
     assessment: RiskAssessment | null;
   }>({ show: false, assessment: null });
   const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services'>('chat');
 
-  // 消息变化时持久化
-  useEffect(() => {
-    saveHistory(messages);
-  }, [messages]);
+  const activeMessages = chatState.activeSessionId 
+    ? chatState.sessions[chatState.activeSessionId]?.messages || [] 
+    : [];
+  const isTyping = chatState.activeSessionId ? !!typingSessions[chatState.activeSessionId] : false;
 
   useEffect(() => {
     const newSocket = io(window.location.origin);
@@ -55,22 +37,111 @@ function App() {
     newSocket.on('connect', () => {
       console.log('已连接到服务器');
       newSocket.emit('create_session');
+      newSocket.emit('list_sessions');
     });
 
     newSocket.on('session_created', (data: { sessionId: string }) => {
-      setSessionId(data.sessionId);
+      setChatState(prev => ({
+        sessions: {
+          ...prev.sessions,
+          [data.sessionId]: {
+            id: data.sessionId,
+            messages: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        },
+        activeSessionId: data.sessionId,
+      }));
+    });
+
+    newSocket.on('sessions_list', (data: { sessions: Session[] }) => {
+      setChatState(prev => {
+        const sessionsMap = { ...prev.sessions };
+        for (const session of data.sessions) {
+          sessionsMap[session.id] = session;
+        }
+        return { ...prev, sessions: sessionsMap };
+      });
+    });
+
+    newSocket.on('session_switched', (data: { sessionId: string; messages: Message[] }) => {
+      setChatState(prev => ({
+        sessions: {
+          ...prev.sessions,
+          [data.sessionId]: {
+            ...prev.sessions[data.sessionId],
+            id: data.sessionId,
+            messages: data.messages,
+          },
+        },
+        activeSessionId: data.sessionId,
+      }));
     });
 
     newSocket.on('message', (data: { sessionId: string; message: Message }) => {
-      setMessages((prev) => [...prev, data.message]);
+      setChatState(prev => {
+        const session = prev.sessions[data.sessionId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          sessions: {
+            ...prev.sessions,
+            [data.sessionId]: {
+              ...session,
+              messages: [...session.messages, data.message],
+              updatedAt: Date.now(),
+            },
+          },
+        };
+      });
     });
 
     newSocket.on('typing', (data: { sessionId: string; typing: boolean }) => {
-      setIsTyping(data.typing);
+      setTypingSessions(prev => ({ ...prev, [data.sessionId]: data.typing }));
     });
 
     newSocket.on('risk_confirm', (data: { sessionId: string; risk: RiskAssessment }) => {
       setRiskConfirm({ show: true, assessment: data.risk });
+    });
+
+    newSocket.on('session_cleared', (data: { sessionId: string }) => {
+      setChatState(prev => {
+        const session = prev.sessions[data.sessionId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          sessions: {
+            ...prev.sessions,
+            [data.sessionId]: {
+              ...session,
+              messages: [],
+              updatedAt: Date.now(),
+            },
+          },
+        };
+      });
+    });
+
+    newSocket.on('session_deleted', (data: { sessionId: string; success: boolean }) => {
+      if (!data.success) return;
+      let shouldCreateNew = false;
+      setChatState(prev => {
+        const nextSessions = { ...prev.sessions };
+        delete nextSessions[data.sessionId];
+        if (prev.activeSessionId === data.sessionId) {
+          const remaining = Object.keys(nextSessions);
+          if (remaining.length > 0) {
+            return { sessions: nextSessions, activeSessionId: remaining[0] };
+          }
+          shouldCreateNew = true;
+          return { sessions: nextSessions, activeSessionId: '' };
+        }
+        return { ...prev, sessions: nextSessions };
+      });
+      if (shouldCreateNew) {
+        setTimeout(() => newSocket.emit('create_session'), 0);
+      }
     });
 
     newSocket.on('error', (data: { message: string }) => {
@@ -81,7 +152,21 @@ function App() {
         type: 'error',
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, errorMsg]);
+      setChatState(prev => {
+        const session = prev.sessions[prev.activeSessionId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          sessions: {
+            ...prev.sessions,
+            [prev.activeSessionId]: {
+              ...session,
+              messages: [...session.messages, errorMsg],
+              updatedAt: Date.now(),
+            },
+          },
+        };
+      });
     });
 
     return () => {
@@ -90,7 +175,7 @@ function App() {
   }, []);
 
   const handleSendMessage = (content: string) => {
-    if (!socket || !sessionId) return;
+    if (!socket || !chatState.activeSessionId) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -98,8 +183,22 @@ function App() {
       content,
       timestamp: Date.now(),
     };
-    setMessages((prev) => [...prev, userMsg]);
-    socket.emit('send_message', { sessionId, message: content });
+    setChatState(prev => {
+      const session = prev.sessions[prev.activeSessionId];
+      if (!session) return prev;
+      return {
+        ...prev,
+        sessions: {
+          ...prev.sessions,
+          [prev.activeSessionId]: {
+            ...session,
+            messages: [...session.messages, userMsg],
+            updatedAt: Date.now(),
+          },
+        },
+      };
+    });
+    socket.emit('send_message', { sessionId: chatState.activeSessionId, message: content });
   };
 
   const handleRiskResponse = (confirmed: boolean) => {
@@ -110,12 +209,22 @@ function App() {
   };
 
   const handleClearChat = () => {
-    if (socket && sessionId) {
-      socket.emit('clear_session', { sessionId });
+    if (socket && chatState.activeSessionId) {
+      socket.emit('clear_session', { sessionId: chatState.activeSessionId });
     }
-    setMessages([]);
-    localStorage.removeItem(STORAGE_KEY);
   };
+
+  const handleSwitchSession = useCallback((sessionId: string) => {
+    socket?.emit('switch_session', { sessionId });
+  }, [socket]);
+
+  const handleCreateSession = useCallback(() => {
+    socket?.emit('create_session');
+  }, [socket]);
+
+  const handleDeleteSession = useCallback((sessionId: string) => {
+    socket?.emit('delete_session', { sessionId });
+  }, [socket]);
 
   const navItems = [
     { id: 'chat' as const, icon: Server, label: '对话' },
@@ -155,13 +264,6 @@ function App() {
             </button>
           ))}
         </nav>
-        <button
-          onClick={handleClearChat}
-          className="p-3 rounded-xl text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors mt-auto"
-          title="清除对话"
-        >
-          <Shield className="w-5 h-5" />
-        </button>
       </div>
 
       {/* 主内容区 */}
@@ -196,9 +298,15 @@ function App() {
         <div className="flex-1 overflow-hidden">
           {activePanel === 'chat' && (
             <ChatPanel
-              messages={messages}
+              sessions={chatState.sessions}
+              activeSessionId={chatState.activeSessionId}
+              messages={activeMessages}
               isTyping={isTyping}
               onSendMessage={handleSendMessage}
+              onSwitchSession={handleSwitchSession}
+              onCreateSession={handleCreateSession}
+              onDeleteSession={handleDeleteSession}
+              onClearSession={handleClearChat}
             />
           )}
           {activePanel === 'dashboard' && <SystemDashboard socket={socket} />}

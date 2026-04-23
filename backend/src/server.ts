@@ -227,8 +227,17 @@ app.post('/api/skills/install', async (req, res) => {
 
 app.delete('/api/skills/:id', async (req, res) => {
   try {
-    const deleted = await agent.getSkillRegistry().uninstallSkill(req.params.id);
-    res.json({ success: deleted });
+    const result = await agent.getSkillRegistry().uninstallSkill(req.params.id);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/skills/:id/force-delete', async (req, res) => {
+  try {
+    const result = await agent.getSkillRegistry().forceUninstallSkill(req.params.id);
+    res.json(result);
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -310,6 +319,24 @@ io.on('connection', (socket) => {
   socket.on('clear_session', (data: { sessionId: string }) => {
     sessionManager.clearSession(data.sessionId);
     socket.emit('session_cleared', { sessionId: data.sessionId });
+  });
+
+  socket.on('list_sessions', () => {
+    const sessions = sessionManager.listSessions();
+    socket.emit('sessions_list', { sessions });
+  });
+
+  socket.on('switch_session', (data: { sessionId: string }) => {
+    const session = sessionManager.getSession(data.sessionId);
+    if (session) {
+      socket.join(data.sessionId);
+      socket.emit('session_switched', { sessionId: data.sessionId, messages: session.messages });
+    }
+  });
+
+  socket.on('delete_session', (data: { sessionId: string }) => {
+    const deleted = sessionManager.deleteSession(data.sessionId);
+    socket.emit('session_deleted', { sessionId: data.sessionId, success: deleted });
   });
 
   socket.on('disconnect', () => {
