@@ -13,6 +13,16 @@ import {
   Server, Terminal, Settings, Zap, Puzzle, Layers
 } from 'lucide-react';
 
+export interface OpenCodeEvent {
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'text' | 'done' | 'error';
+  data?: any;
+  text?: string;
+  tool?: string;
+  command?: string;
+  output?: string;
+  error?: string;
+}
+
 function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [chatState, setChatState] = useState<{
@@ -26,10 +36,16 @@ function App() {
   }>({ show: false, assessment: null });
   const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services'>('chat');
 
+  // Opencode 状态
+  const [opencodeAvailable, setOpencodeAvailable] = useState(false);
+  const [useOpencode, setUseOpencode] = useState(false);
+  const [opencodeStreams, setOpencodeStreams] = useState<Record<string, OpenCodeEvent[]>>({});
+
   const activeMessages = chatState.activeSessionId
     ? chatState.sessions[chatState.activeSessionId]?.messages || []
     : [];
   const isTyping = chatState.activeSessionId ? !!typingSessions[chatState.activeSessionId] : false;
+  const activeStream = chatState.activeSessionId ? opencodeStreams[chatState.activeSessionId] || [] : [];
 
   useEffect(() => {
     const newSocket = io(window.location.origin);
@@ -39,6 +55,13 @@ function App() {
       console.log('已连接到服务器');
       newSocket.emit('create_session');
       newSocket.emit('list_sessions');
+      // 检测 opencode 可用性
+      fetch('/api/health')
+        .then(r => r.json())
+        .then(data => {
+          if (data.opencode) setOpencodeAvailable(true);
+        })
+        .catch(() => {});
     });
 
     newSocket.on('session_created', (data: { sessionId: string }) => {
@@ -124,6 +147,25 @@ function App() {
       });
     });
 
+    // Opencode 流式事件
+    newSocket.on('opencode_event', (data: { sessionId: string; event: OpenCodeEvent }) => {
+      setOpencodeStreams(prev => ({
+        ...prev,
+        [data.sessionId]: [...(prev[data.sessionId] || []), data.event],
+      }));
+    });
+
+    newSocket.on('opencode_done', (data: { sessionId: string }) => {
+      // 3秒后清理流
+      setTimeout(() => {
+        setOpencodeStreams(prev => {
+          const next = { ...prev };
+          delete next[data.sessionId];
+          return next;
+        });
+      }, 5000);
+    });
+
     newSocket.on('session_deleted', (data: { sessionId: string; success: boolean }) => {
       if (!data.success) return;
       let shouldCreateNew = false;
@@ -199,7 +241,12 @@ function App() {
         },
       };
     });
-    socket.emit('send_message', { sessionId: chatState.activeSessionId, message: content });
+
+    if (useOpencode && opencodeAvailable) {
+      socket.emit('send_message_opencode', { sessionId: chatState.activeSessionId, message: content });
+    } else {
+      socket.emit('send_message', { sessionId: chatState.activeSessionId, message: content });
+    }
   };
 
   const handleRiskResponse = (confirmed: boolean) => {
@@ -319,6 +366,10 @@ function App() {
               onCreateSession={handleCreateSession}
               onDeleteSession={handleDeleteSession}
               onClearSession={handleClearChat}
+              opencodeAvailable={opencodeAvailable}
+              useOpencode={useOpencode}
+              setUseOpencode={setUseOpencode}
+              opencodeStream={activeStream}
             />
           )}
           {activePanel === 'dashboard' && <SystemDashboard socket={socket} />}

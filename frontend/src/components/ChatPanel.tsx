@@ -2,7 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Message, Session } from '../../../shared/types';
 import { MessageBubble } from './MessageBubble';
 import { SmartResult } from './SmartResult';
-import { Send, Mic, MicOff, Loader2, Activity, Shield, Zap, Volume2, VolumeX, Plus, Trash2, MessageSquare } from 'lucide-react';
+import { OpenCodeEvent } from '../App';
+import {
+  Send, Mic, MicOff, Loader2, Activity, Shield, Zap, Volume2, VolumeX,
+  Plus, Trash2, MessageSquare, Bot, Terminal
+} from 'lucide-react';
 
 interface ChatPanelProps {
   sessions: Record<string, Session>;
@@ -14,6 +18,10 @@ interface ChatPanelProps {
   onCreateSession: () => void;
   onDeleteSession: (sessionId: string) => void;
   onClearSession: () => void;
+  opencodeAvailable: boolean;
+  useOpencode: boolean;
+  setUseOpencode: (v: boolean) => void;
+  opencodeStream: OpenCodeEvent[];
 }
 
 const TTS_KEY = 'os-manager-tts-enabled';
@@ -61,6 +69,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   onCreateSession,
   onDeleteSession,
   onClearSession,
+  opencodeAvailable,
+  useOpencode,
+  setUseOpencode,
+  opencodeStream,
 }) => {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -373,6 +385,70 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             </div>
           ))}
 
+          {/* Opencode 流式执行过程 */}
+          {opencodeStream.length > 0 && (
+            <div className="animate-fade-in-up border rounded-xl p-4 space-y-2 theme-transition"
+                 style={{ borderColor: 'var(--color-accent)', backgroundColor: 'var(--color-accent-dim)' }}>
+              <div className="flex items-center gap-2 text-sm font-bold" style={{ color: 'var(--color-accent)' }}>
+                <Bot className="w-4 h-4" />
+                Opencode Agent 执行中
+                <Loader2 className="w-3.5 h-3.5 animate-spin ml-auto" />
+              </div>
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {opencodeStream.map((evt, i) => {
+                  if (evt.type === 'thinking') {
+                    return (
+                      <div key={i} className="text-xs flex items-center gap-1.5" style={{ color: 'var(--color-text-secondary)' }}>
+                        <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-accent)' }} />
+                        正在思考下一步...
+                      </div>
+                    );
+                  }
+                  if (evt.type === 'tool_call') {
+                    return (
+                      <div key={i} className="text-xs flex items-center gap-1.5" style={{ color: 'var(--color-text-muted)' }}>
+                        <Terminal className="w-3 h-3" />
+                        执行: <code className="font-mono" style={{ color: 'var(--color-text-secondary)' }}>{evt.command}</code>
+                      </div>
+                    );
+                  }
+                  if (evt.type === 'tool_result') {
+                    return (
+                      <div key={i} className="text-xs">
+                        <div className="flex items-center gap-1.5" style={{ color: evt.error ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                          {evt.error ? <Shield className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
+                          {evt.error ? `失败: ${evt.error}` : '执行完成'}
+                        </div>
+                        {evt.output && (
+                          <pre className="mt-1 text-[10px] font-mono p-1.5 rounded overflow-x-auto max-h-24 overflow-y-auto"
+                               style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text-secondary)' }}>
+                            {evt.output.length > 500 ? evt.output.slice(0, 500) + '...' : evt.output}
+                          </pre>
+                        )}
+                      </div>
+                    );
+                  }
+                  if (evt.type === 'text') {
+                    return (
+                      <div key={i} className="text-xs mt-2 pt-2 border-t" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                        <div className="font-semibold mb-1" style={{ color: 'var(--color-text-primary)' }}>AI 总结：</div>
+                        <div className="whitespace-pre-wrap">{evt.text}</div>
+                      </div>
+                    );
+                  }
+                  if (evt.type === 'error') {
+                    return (
+                      <div key={i} className="text-xs" style={{ color: 'var(--color-danger)' }}>
+                        错误: {evt.error}
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+              </div>
+            </div>
+          )}
+
           {isTyping && (
             <div className="flex items-center gap-3 text-[var(--color-text-muted)] bg-[var(--color-surface)] w-fit px-5 py-2.5 rounded-full border border-[var(--color-border)]">
               <Loader2 className="w-4 h-4 animate-spin text-[var(--color-accent)]" />
@@ -428,6 +504,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
                 title={ttsEnabled ? '语音播报已开启' : '语音播报已关闭'}
               >
                 {ttsEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+              </button>
+            )}
+
+            {opencodeAvailable && (
+              <button
+                type="button"
+                onClick={() => setUseOpencode(!useOpencode)}
+                className={`p-3 rounded-xl transition-all duration-300 flex items-center gap-1.5 text-xs font-medium ${
+                  useOpencode
+                    ? 'bg-[var(--color-accent-dim)] text-[var(--color-accent)] hover:bg-[var(--color-accent)]/25 border border-[var(--color-accent)]/30'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--surface-hover)] border border-transparent'
+                }`}
+                title={useOpencode ? '使用 Opencode Agent' : '使用 DeepSeek Agent'}
+              >
+                {useOpencode ? <Bot className="w-4 h-4" /> : <Terminal className="w-4 h-4" />}
+                <span className="hidden sm:inline">{useOpencode ? 'Opencode' : 'DeepSeek'}</span>
               </button>
             )}
 

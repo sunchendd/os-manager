@@ -7,6 +7,7 @@ import { config, updateAIConfig, maskApiKey } from './config';
 import { AgentCore } from './agent/AgentCore';
 import { MockAgentCore } from './agent/MockAgentCore';
 import { SessionManager } from './agent/SessionManager';
+import { OpenCodeBridge, isOpenCodeAvailable } from './agent/OpenCodeBridge';
 
 import { SystemTools } from './tools/SystemTools';
 import { SystemDetector } from './tools/SystemDetector';
@@ -45,7 +46,9 @@ function createAgent() {
 }
 
 let agent = createAgent();
+const opencodeAvailable = isOpenCodeAvailable();
 console.log(`🤖 AI模式: ${isRealAIEnabled() ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
+console.log(`🔌 Opencode Agent: ${opencodeAvailable ? '已安装' : '未安装'}`);
 
 function reinitAgent() {
   const wasReal = agent instanceof AgentCore;
@@ -65,6 +68,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+    opencode: opencodeAvailable,
     timestamp: new Date().toISOString()
   });
 });
@@ -340,7 +344,7 @@ io.on('connection', (socket) => {
   socket.on('send_message', async (data: { sessionId: string; message: string }) => {
     try {
       const { sessionId, message } = data;
-      
+
       socket.emit('typing', { sessionId, typing: true });
 
       const messages = await agent.processMessage(sessionId, message, async (risk) => {
@@ -349,17 +353,17 @@ io.on('connection', (socket) => {
             sessionId,
             risk,
           });
-          
+
           socket.once('risk_response', (data: { confirmed: boolean }) => {
             resolve(data.confirmed);
           });
-          
+
           setTimeout(() => resolve(false), 30000);
         });
       });
 
       socket.emit('typing', { sessionId, typing: false });
-      
+
       for (const msg of messages) {
         if (msg.role === 'assistant') {
           socket.emit('message', {
@@ -373,6 +377,77 @@ io.on('connection', (socket) => {
         message: error.message || '处理消息时出错',
       });
     }
+  });
+
+  // Opencode Agent 流式执行
+  socket.on('send_message_opencode', async (data: { sessionId: string; message: string }) => {
+    if (!opencodeAvailable) {
+      socket.emit('error', { message: 'Opencode Agent 未安装，请先安装 opencode CLI' });
+      return;
+    }
+
+    const { sessionId, message } = data;
+
+    // 保存用户消息到会话
+    const userMsg = {
+      id: Date.now().toString(),
+      role: 'user' as const,
+      content: message,
+      timestamp: Date.now(),
+    };
+    const session = sessionManager.getSession(sessionId);
+    if (session) {
+      sessionManager.addMessage(sessionId, userMsg);
+    }
+
+    socket.emit('typing', { sessionId, typing: true });
+    socket.emit('opencode_start', { sessionId });
+
+    const bridge = new OpenCodeBridge();
+    const executedCommands: Array<{ command: string; output: string; success: boolean; timestamp: number }> = [];
+    let finalText = '';
+
+    bridge.on('event', (evt) => {
+      socket.emit('opencode_event', { sessionId, event: evt });
+
+      if (evt.type === 'tool_result' && evt.command) {
+        executedCommands.push({
+          command: evt.command,
+          output: evt.output || '',
+          success: !evt.error,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    try {
+      finalText = await bridge.run(message);
+    } catch (error: any) {
+      socket.emit('opencode_event', {
+        sessionId,
+        event: { type: 'error', error: error.message || 'Opencode 执行失败' },
+      });
+      finalText = `❌ Opencode Agent 执行失败: ${error.message || '未知错误'}`;
+    }
+
+    socket.emit('typing', { sessionId, typing: false });
+    socket.emit('opencode_done', { sessionId });
+
+    // 发送最终 assistant 消息
+    const assistantMsg = {
+      id: Date.now().toString(),
+      role: 'assistant' as const,
+      content: finalText || 'Opencode Agent 已完成执行，但未返回结果。',
+      commands: executedCommands.length > 0 ? executedCommands : undefined,
+      timestamp: Date.now(),
+    };
+    if (session) {
+      sessionManager.addMessage(sessionId, assistantMsg);
+    }
+    socket.emit('message', {
+      sessionId,
+      message: assistantMsg,
+    });
   });
 
   socket.on('clear_session', (data: { sessionId: string }) => {
