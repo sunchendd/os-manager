@@ -40,7 +40,11 @@ export class SessionManager {
     }
   }
 
-  deleteSession(sessionId: string): void {
-    this.sessions.delete(sessionId);
+  deleteSession(sessionId: string): boolean {
+    return this.sessions.delete(sessionId);
+  }
+
+  listSessions(): Session[] {
+    return Array.from(this.sessions.values());
   }
 }

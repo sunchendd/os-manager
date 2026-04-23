@@ -25,7 +25,8 @@ export class MockAgentCore {
   async processMessage(
     sessionId: string,
     userInput: string,
-    onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>
+    onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>,
+    _agentConfig?: { instructions?: string; skills?: string[] }
   ): Promise<Message[]> {
     const session = this.sessionManager.getSession(sessionId);
     if (!session) {
@@ -408,16 +409,16 @@ export class MockAgentCore {
 
   private formatResponse(input: string, command: string, result: { success: boolean; output: string; error?: string }): string {
     let response = `💻 **执行命令**: \`${command}\`\n\n`;
-    
+
     if (result.success) {
       if (result.output) {
-        response += '```\n' + result.output + '\n```\n\n';
+        response += '```\n' + result.output + '```\n\n';
       } else {
         response += '✅ 命令执行成功（无输出）\n\n';
       }
-      
+
       response += '---\n\n';
-      
+
       if (/df -h/.test(command)) {
         response += '📊 **结果解释**: 显示了所有文件系统的磁盘使用情况。如果某个分区的使用率超过90%，需要及时清理。';
       } else if (/free -h/.test(command)) {
@@ -432,7 +433,11 @@ export class MockAgentCore {
     } else {
       response += `❌ **执行失败**\n\n错误信息: ${result.error || '未知错误'}\n\n建议检查命令参数或权限。`;
     }
-    
+
     return response;
+  }
+
+  reinit() {
+    // MockAgentCore 无需重新初始化
   }
 }

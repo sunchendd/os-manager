@@ -11,141 +11,127 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        // 标题
         h1: ({ children }) => (
-          <h1 className="text-lg font-bold text-white mt-4 mb-2 pb-1 border-b border-slate-600">
+          <h1 className="text-lg font-extrabold text-[var(--color-text-primary)] mt-5 mb-3 pb-2 border-b border-[var(--color-border)] tracking-tight">
             {children}
           </h1>
         ),
         h2: ({ children }) => (
-          <h2 className="text-base font-bold text-white mt-3 mb-2">
+          <h2 className="text-base font-bold text-[var(--color-text-primary)] mt-4 mb-2 tracking-tight">
             {children}
           </h2>
         ),
         h3: ({ children }) => (
-          <h3 className="text-sm font-bold text-slate-200 mt-2 mb-1">
+          <h3 className="text-sm font-bold text-[var(--color-text-secondary)] mt-3 mb-1.5">
             {children}
           </h3>
         ),
         h4: ({ children }) => (
-          <h4 className="text-sm font-semibold text-slate-300 mt-2 mb-1">
+          <h4 className="text-sm font-semibold text-[var(--color-text-muted)] mt-3 mb-1.5">
             {children}
           </h4>
         ),
-        // 段落
         p: ({ children }) => (
-          <p className="mb-2 leading-relaxed text-slate-200">
+          <p className="mb-2.5 leading-relaxed text-[var(--color-text-secondary)]">
             {children}
           </p>
         ),
-        // 粗体
         strong: ({ children }) => (
-          <strong className="font-bold text-white">
+          <strong className="font-bold text-[var(--color-text-primary)]">
             {children}
           </strong>
         ),
-        // 斜体
         em: ({ children }) => (
-          <em className="italic text-slate-300">
+          <em className="italic text-[var(--color-text-muted)]">
             {children}
           </em>
         ),
-        // 删除线
         del: ({ children }) => (
-          <del className="line-through text-slate-500">
+          <del className="line-through text-[var(--color-text-muted)] opacity-60">
             {children}
           </del>
         ),
-        // 无序列表
         ul: ({ children }) => (
-          <ul className="list-disc list-inside mb-2 space-y-0.5 text-slate-200">
+          <ul className="list-disc list-inside mb-2.5 space-y-1 text-[var(--color-text-secondary)]">
             {children}
           </ul>
         ),
-        // 有序列表
         ol: ({ children }) => (
-          <ol className="list-decimal list-inside mb-2 space-y-0.5 text-slate-200">
+          <ol className="list-decimal list-inside mb-2.5 space-y-1 text-[var(--color-text-secondary)]">
             {children}
           </ol>
         ),
-        // 列表项
         li: ({ children }) => (
-          <li className="text-sm leading-relaxed">
+          <li className="text-sm leading-relaxed marker:text-[var(--color-text-muted)]">
             {children}
           </li>
         ),
-        // 代码块
         pre: ({ children }) => (
-          <pre className="bg-slate-950 border border-slate-700 rounded-lg p-3 my-2 overflow-x-auto">
+          <pre className="bg-[#0e0e14] border border-[var(--color-border)] rounded-xl p-4 my-3 overflow-x-auto shadow-inner">
             {children}
           </pre>
         ),
-        // 行内代码
         code: ({ children, className }) => {
           const isBlock = className?.includes('language-');
           if (isBlock) {
             return (
-              <code className="text-xs font-mono text-green-300 block">
+              <code className="text-xs font-mono text-[#e8a87c] block leading-relaxed">
                 {children}
               </code>
             );
           }
           return (
-            <code className="bg-slate-700/60 text-amber-300 px-1 py-0.5 rounded text-xs font-mono">
+            <code className="bg-[var(--surface-hover)] text-[var(--color-secondary)] px-1.5 py-0.5 rounded-md text-xs font-mono border border-[var(--color-border)]">
               {children}
             </code>
           );
         },
-        // 引用块
         blockquote: ({ children }) => (
-          <blockquote className="border-l-4 border-indigo-500 pl-3 py-1 my-2 bg-slate-700/30 rounded-r text-slate-300 text-sm italic">
+          <blockquote className="border-l-[3px] border-[var(--color-accent)] pl-4 py-1 my-3 bg-[var(--color-accent-dim)] rounded-r-lg text-[var(--color-text-secondary)] text-sm italic">
             {children}
           </blockquote>
         ),
-        // 表格
         table: ({ children }) => (
-          <div className="overflow-x-auto my-2">
-            <table className="w-full text-sm border-collapse border border-slate-600 rounded-lg overflow-hidden">
+          <div className="overflow-x-auto my-3 rounded-xl border border-[var(--color-border)]">
+            <table className="w-full text-sm border-collapse">
               {children}
             </table>
           </div>
         ),
         thead: ({ children }) => (
-          <thead className="bg-slate-700 text-slate-200">
+          <thead className="bg-[var(--surface-elevated)] text-[var(--color-text-primary)]">
             {children}
           </thead>
         ),
         tbody: ({ children }) => (
-          <tbody className="bg-slate-800/50 text-slate-300">
+          <tbody className="bg-[var(--color-surface)] text-[var(--color-text-secondary)]">
             {children}
           </tbody>
         ),
         tr: ({ children }) => (
-          <tr className="border-b border-slate-700 last:border-0">
+          <tr className="border-b border-[var(--color-border)] last:border-0">
             {children}
           </tr>
         ),
         th: ({ children }) => (
-          <th className="px-3 py-2 text-left font-semibold text-xs uppercase tracking-wide">
+          <th className="px-4 py-2.5 text-left font-bold text-[11px] uppercase tracking-widest text-[var(--color-text-muted)]">
             {children}
           </th>
         ),
         td: ({ children }) => (
-          <td className="px-3 py-2 text-xs">
+          <td className="px-4 py-2.5 text-xs">
             {children}
           </td>
         ),
-        // 水平分割线
         hr: () => (
-          <hr className="my-3 border-slate-600" />
+          <hr className="my-4 border-[var(--color-border)]" />
         ),
-        // 链接
         a: ({ children, href }) => (
           <a
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
+            className="text-[var(--color-accent)] hover:text-[var(--color-secondary)] underline underline-offset-4 decoration-[var(--color-accent)]/30 hover:decoration-[var(--color-secondary)] transition-colors font-medium"
           >
             {children}
           </a>

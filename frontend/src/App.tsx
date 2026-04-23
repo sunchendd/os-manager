@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Message, RiskAssessment } from '../../shared/types';
+import { Message, RiskAssessment, Session } from '../../shared/types';
 import { ChatPanel } from './components/ChatPanel';
 import { RiskConfirmModal } from './components/RiskConfirmModal';
 import { SystemDashboard } from './components/SystemDashboard';
@@ -8,45 +8,57 @@ import { SystemInfoPanel } from './components/SystemInfoPanel';
 import { OptimizationPanel } from './components/OptimizationPanel';
 import { SkillMarketplace } from './components/SkillMarketplace';
 import { ServicesPanel } from './components/ServicesPanel';
-import { 
-  Server, Shield, Terminal, Settings, Zap, Puzzle, Layers
+import { ThemeSwitcher } from './components/ThemeSwitcher';
+import { AgentPanel } from './components/AgentPanel';
+import {
+  Server, Terminal, Settings, Zap, Puzzle, Layers, Bot
 } from 'lucide-react';
 
-
-const STORAGE_KEY = 'os-manager-chat-history';
-
-function loadHistory(): Message[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch { /* ignore */ }
-  return [];
-}
-
-function saveHistory(messages: Message[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-  } catch { /* ignore */ }
+export interface OpenCodeEvent {
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'text' | 'done' | 'error';
+  data?: any;
+  text?: string;
+  tool?: string;
+  command?: string;
+  output?: string;
+  error?: string;
 }
 
 function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [sessionId, setSessionId] = useState<string>('');
-  const [messages, setMessages] = useState<Message[]>(loadHistory);
-  const [isTyping, setIsTyping] = useState(false);
+  const [chatState, setChatState] = useState<{
+    sessions: Record<string, Session>;
+    activeSessionId: string;
+  }>({ sessions: {}, activeSessionId: '' });
+  const [typingSessions, setTypingSessions] = useState<Record<string, boolean>>({});
   const [riskConfirm, setRiskConfirm] = useState<{
     show: boolean;
     assessment: RiskAssessment | null;
   }>({ show: false, assessment: null });
-  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services'>('chat');
+  const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services' | 'agents'>('chat');
 
-  // 消息变化时持久化
-  useEffect(() => {
-    saveHistory(messages);
-  }, [messages]);
+  // Opencode 状态
+  const [opencodeAvailable, setOpencodeAvailable] = useState(false);
+  const [opencodeStreams, setOpencodeStreams] = useState<Record<string, OpenCodeEvent[]>>({});
+
+  // Agent 状态
+  interface AgentConfig {
+    id: string;
+    name: string;
+    description: string;
+    instructions: string;
+    model: string;
+    skills: string[];
+    environment: Record<string, string>;
+  }
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+
+  const activeMessages = chatState.activeSessionId
+    ? chatState.sessions[chatState.activeSessionId]?.messages || []
+    : [];
+  const isTyping = chatState.activeSessionId ? !!typingSessions[chatState.activeSessionId] : false;
+  const activeStream = chatState.activeSessionId ? opencodeStreams[chatState.activeSessionId] || [] : [];
 
   useEffect(() => {
     const newSocket = io(window.location.origin);
@@ -55,22 +67,137 @@ function App() {
     newSocket.on('connect', () => {
       console.log('已连接到服务器');
       newSocket.emit('create_session');
+      newSocket.emit('list_sessions');
+      // 检测 opencode 可用性
+      fetch('/api/health')
+        .then(r => r.json())
+        .then(data => {
+          if (data.opencode) setOpencodeAvailable(true);
+        })
+        .catch(() => {});
     });
 
     newSocket.on('session_created', (data: { sessionId: string }) => {
-      setSessionId(data.sessionId);
+      setChatState(prev => ({
+        sessions: {
+          ...prev.sessions,
+          [data.sessionId]: {
+            id: data.sessionId,
+            messages: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          },
+        },
+        activeSessionId: data.sessionId,
+      }));
+    });
+
+    newSocket.on('sessions_list', (data: { sessions: Session[] }) => {
+      setChatState(prev => {
+        const sessionsMap = { ...prev.sessions };
+        for (const session of data.sessions) {
+          sessionsMap[session.id] = session;
+        }
+        return { ...prev, sessions: sessionsMap };
+      });
+    });
+
+    newSocket.on('session_switched', (data: { sessionId: string; messages: Message[] }) => {
+      setChatState(prev => ({
+        sessions: {
+          ...prev.sessions,
+          [data.sessionId]: {
+            ...prev.sessions[data.sessionId],
+            id: data.sessionId,
+            messages: data.messages,
+          },
+        },
+        activeSessionId: data.sessionId,
+      }));
     });
 
     newSocket.on('message', (data: { sessionId: string; message: Message }) => {
-      setMessages((prev) => [...prev, data.message]);
+      setChatState(prev => {
+        const session = prev.sessions[data.sessionId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          sessions: {
+            ...prev.sessions,
+            [data.sessionId]: {
+              ...session,
+              messages: [...session.messages, data.message],
+              updatedAt: Date.now(),
+            },
+          },
+        };
+      });
     });
 
     newSocket.on('typing', (data: { sessionId: string; typing: boolean }) => {
-      setIsTyping(data.typing);
+      setTypingSessions(prev => ({ ...prev, [data.sessionId]: data.typing }));
     });
 
     newSocket.on('risk_confirm', (data: { sessionId: string; risk: RiskAssessment }) => {
       setRiskConfirm({ show: true, assessment: data.risk });
+    });
+
+    newSocket.on('session_cleared', (data: { sessionId: string }) => {
+      setChatState(prev => {
+        const session = prev.sessions[data.sessionId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          sessions: {
+            ...prev.sessions,
+            [data.sessionId]: {
+              ...session,
+              messages: [],
+              updatedAt: Date.now(),
+            },
+          },
+        };
+      });
+    });
+
+    // Opencode 流式事件
+    newSocket.on('opencode_event', (data: { sessionId: string; event: OpenCodeEvent }) => {
+      setOpencodeStreams(prev => ({
+        ...prev,
+        [data.sessionId]: [...(prev[data.sessionId] || []), data.event],
+      }));
+    });
+
+    newSocket.on('opencode_done', (data: { sessionId: string }) => {
+      // 3秒后清理流
+      setTimeout(() => {
+        setOpencodeStreams(prev => {
+          const next = { ...prev };
+          delete next[data.sessionId];
+          return next;
+        });
+      }, 5000);
+    });
+
+    newSocket.on('session_deleted', (data: { sessionId: string; success: boolean }) => {
+      if (!data.success) return;
+      let shouldCreateNew = false;
+      setChatState(prev => {
+        const nextSessions = { ...prev.sessions };
+        delete nextSessions[data.sessionId];
+        if (prev.activeSessionId === data.sessionId) {
+          const remaining = Object.keys(nextSessions);
+          if (remaining.length > 0) {
+            return { sessions: nextSessions, activeSessionId: remaining[0] };
+          }
+          shouldCreateNew = true;
+          return { sessions: nextSessions, activeSessionId: '' };
+        }
+        return { ...prev, sessions: nextSessions };
+      });
+      if (shouldCreateNew) {
+        setTimeout(() => newSocket.emit('create_session'), 0);
+      }
     });
 
     newSocket.on('error', (data: { message: string }) => {
@@ -81,7 +208,21 @@ function App() {
         type: 'error',
         timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, errorMsg]);
+      setChatState(prev => {
+        const session = prev.sessions[prev.activeSessionId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          sessions: {
+            ...prev.sessions,
+            [prev.activeSessionId]: {
+              ...session,
+              messages: [...session.messages, errorMsg],
+              updatedAt: Date.now(),
+            },
+          },
+        };
+      });
     });
 
     return () => {
@@ -89,8 +230,8 @@ function App() {
     };
   }, []);
 
-  const handleSendMessage = (content: string) => {
-    if (!socket || !sessionId) return;
+  const handleSendMessage = (content: string, agentId?: string) => {
+    if (!socket || !chatState.activeSessionId) return;
 
     const userMsg: Message = {
       id: Date.now().toString(),
@@ -98,9 +239,46 @@ function App() {
       content,
       timestamp: Date.now(),
     };
-    setMessages((prev) => [...prev, userMsg]);
-    socket.emit('send_message', { sessionId, message: content });
+    setChatState(prev => {
+      const session = prev.sessions[prev.activeSessionId];
+      if (!session) return prev;
+      return {
+        ...prev,
+        sessions: {
+          ...prev.sessions,
+          [prev.activeSessionId]: {
+            ...session,
+            messages: [...session.messages, userMsg],
+            updatedAt: Date.now(),
+          },
+        },
+      };
+    });
+
+    if (opencodeAvailable) {
+      socket.emit('send_message_opencode', {
+        sessionId: chatState.activeSessionId,
+        message: content,
+        agentId: agentId || null,
+      });
+    } else {
+      socket.emit('send_message', {
+        sessionId: chatState.activeSessionId,
+        message: content,
+        agentId: agentId || null,
+      });
+    }
   };
+
+  // 加载 Agents
+  useEffect(() => {
+    fetch('/api/agents')
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) setAgents(data.data);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleRiskResponse = (confirmed: boolean) => {
     if (socket) {
@@ -110,29 +288,52 @@ function App() {
   };
 
   const handleClearChat = () => {
-    if (socket && sessionId) {
-      socket.emit('clear_session', { sessionId });
+    if (socket && chatState.activeSessionId) {
+      socket.emit('clear_session', { sessionId: chatState.activeSessionId });
     }
-    setMessages([]);
-    localStorage.removeItem(STORAGE_KEY);
   };
 
+  const handleSwitchSession = useCallback((sessionId: string) => {
+    socket?.emit('switch_session', { sessionId });
+  }, [socket]);
+
+  const handleCreateSession = useCallback(() => {
+    socket?.emit('create_session');
+  }, [socket]);
+
+  const handleDeleteSession = useCallback((sessionId: string) => {
+    socket?.emit('delete_session', { sessionId });
+  }, [socket]);
+
   const navItems = [
-    { id: 'chat' as const, icon: Server, label: '对话' },
-    { id: 'dashboard' as const, icon: Terminal, label: '监控' },
-    { id: 'services' as const, icon: Layers, label: '服务' },
-    { id: 'system' as const, icon: Settings, label: '系统' },
-    { id: 'optimize' as const, icon: Zap, label: '优化' },
-    { id: 'skills' as const, icon: Puzzle, label: '技能' },
+    { id: 'chat' as const, icon: Server, label: '智能对话' },
+    { id: 'dashboard' as const, icon: Terminal, label: '系统监控' },
+    { id: 'services' as const, icon: Layers, label: '系统服务' },
+    { id: 'system' as const, icon: Settings, label: '系统配置' },
+    { id: 'optimize' as const, icon: Zap, label: '系统优化' },
+    { id: 'skills' as const, icon: Puzzle, label: '技能市场' },
+    { id: 'agents' as const, icon: Bot, label: 'Agent员工' },
   ];
 
+  const panelTitles: Record<string, { title: string; subtitle: string }> = {
+    chat: { title: '智能对话', subtitle: '自然语言管理服务器' },
+    dashboard: { title: '系统监控', subtitle: '实时性能指标' },
+    services: { title: '服务管理', subtitle: '系统服务状态' },
+    system: { title: '系统配置', subtitle: '镜像源与系统信息' },
+    optimize: { title: '系统优化', subtitle: '一键性能调优' },
+    skills: { title: '技能市场', subtitle: '管理与安装技能' },
+    agents: { title: 'AI 员工', subtitle: '自定义 AI 员工角色' },
+  };
+
   return (
-    <div className="flex h-screen bg-slate-900">
+    <div className="flex h-screen theme-transition" style={{ backgroundColor: 'var(--color-bg)' }}>
       {/* 侧边栏 */}
-      <div className="w-16 bg-slate-800 flex flex-col items-center py-4 border-r border-slate-700">
+      <div className="w-[72px] flex flex-col items-center py-4 border-r theme-transition"
+           style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <div className="mb-6">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
-            <Server className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center theme-transition"
+               style={{ backgroundColor: 'var(--color-accent)' }}>
+            <Server className="w-5 h-5" style={{ color: 'var(--color-text-on-accent)' }} />
           </div>
         </div>
         <nav className="flex-1 flex flex-col gap-1">
@@ -140,55 +341,46 @@ function App() {
             <button
               key={item.id}
               onClick={() => setActivePanel(item.id)}
-              className={`p-3 rounded-xl transition-all relative group ${
+              className={`flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl transition-all relative group ${
                 activePanel === item.id
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                  ? 'shadow-lg'
+                  : 'hover:opacity-100 opacity-70'
               }`}
+              style={activePanel === item.id
+                ? { backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)', boxShadow: '0 4px 20px -4px var(--color-glow-accent)' }
+                : { color: 'var(--color-text-muted)' }
+              }
               title={item.label}
             >
               <item.icon className="w-5 h-5" />
-              {/* Tooltip */}
-              <span className="absolute left-full ml-2 px-2 py-1 bg-slate-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 border border-slate-700">
+              <span className="text-[10px] font-medium leading-tight text-center whitespace-nowrap">
                 {item.label}
               </span>
             </button>
           ))}
         </nav>
-        <button
-          onClick={handleClearChat}
-          className="p-3 rounded-xl text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors mt-auto"
-          title="清除对话"
-        >
-          <Shield className="w-5 h-5" />
-        </button>
       </div>
 
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 头部 */}
-        <header className="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <header className="border-b px-6 py-3 flex items-center justify-between flex-shrink-0 theme-transition"
+                style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold text-white">
-              {activePanel === 'chat' && '智能对话'}
-              {activePanel === 'dashboard' && '系统监控'}
-              {activePanel === 'services' && '系统服务'}
-              {activePanel === 'system' && '系统配置'}
-              {activePanel === 'optimize' && '系统优化'}
-              {activePanel === 'skills' && '技能市场'}
+            <h1 className="text-lg font-bold theme-transition" style={{ color: 'var(--color-text-primary)' }}>
+              {panelTitles[activePanel].title}
             </h1>
-            <span className="text-xs text-slate-500">
-              {activePanel === 'chat' && '自然语言管理服务器'}
-              {activePanel === 'dashboard' && '实时系统状态'}
-              {activePanel === 'services' && '管理系统服务状态'}
-              {activePanel === 'system' && '镜像源与系统信息'}
-              {activePanel === 'optimize' && '一键优化与安全加固'}
-              {activePanel === 'skills' && '扩展AI能力'}
+            <span className="text-xs theme-transition" style={{ color: 'var(--color-text-muted)' }}>
+              {panelTitles[activePanel].subtitle}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-xs text-slate-400">已连接</span>
+          <div className="flex items-center gap-3">
+            <ThemeSwitcher />
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full animate-pulse"
+                   style={{ backgroundColor: 'var(--color-success)' }} />
+              <span className="text-xs theme-transition" style={{ color: 'var(--color-text-muted)' }}>已连接</span>
+            </div>
           </div>
         </header>
 
@@ -196,9 +388,19 @@ function App() {
         <div className="flex-1 overflow-hidden">
           {activePanel === 'chat' && (
             <ChatPanel
-              messages={messages}
+              sessions={chatState.sessions}
+              activeSessionId={chatState.activeSessionId}
+              messages={activeMessages}
               isTyping={isTyping}
               onSendMessage={handleSendMessage}
+              onSwitchSession={handleSwitchSession}
+              onCreateSession={handleCreateSession}
+              onDeleteSession={handleDeleteSession}
+              onClearSession={handleClearChat}
+              opencodeStream={activeStream}
+              agents={agents}
+              activeAgentId={activeAgentId}
+              onSelectAgent={setActiveAgentId}
             />
           )}
           {activePanel === 'dashboard' && <SystemDashboard socket={socket} />}
@@ -206,6 +408,12 @@ function App() {
           {activePanel === 'system' && <SystemInfoPanel />}
           {activePanel === 'optimize' && <OptimizationPanel />}
           {activePanel === 'skills' && <SkillMarketplace />}
+          {activePanel === 'agents' && (
+            <AgentPanel
+              agents={agents}
+              onAgentsChange={setAgents}
+            />
+          )}
         </div>
       </div>
 

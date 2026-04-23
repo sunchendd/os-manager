@@ -265,24 +265,45 @@ export class SkillRegistry {
   }
 
   // 卸载 skill
-  async uninstallSkill(id: string): Promise<boolean> {
+  async uninstallSkill(id: string): Promise<{ success: boolean; error?: string }> {
     const skill = this.skills.get(id);
-    if (!skill) return false;
-    
+    if (!skill) return { success: false, error: 'Skill 未找到' };
+
     // 不能卸载 opencode 内置 skill
     if (skill.source === 'opencode') {
-      throw new Error('不能卸载 opencode 内置 skill');
+      return { success: false, error: '不能卸载 opencode 内置 skill' };
     }
 
     this.skills.delete(id);
-    
+
     try {
       await fs.rm(skill.location, { recursive: true, force: true });
-    } catch (e) {
+    } catch (e: any) {
       console.error('删除 skill 文件失败:', e);
+      return { success: true, error: 'Skill 已从注册表移除，但文件删除失败: ' + e.message };
     }
-    
-    return true;
+
+    return { success: true };
+  }
+
+  // 强制卸载 skill（用于文件损坏或无法删除的情况）
+  async forceUninstallSkill(id: string): Promise<{ success: boolean; error?: string }> {
+    const skill = this.skills.get(id);
+    if (!skill) return { success: false, error: 'Skill 未找到' };
+
+    if (skill.source === 'opencode') {
+      return { success: false, error: '不能卸载 opencode 内置 skill' };
+    }
+
+    this.skills.delete(id);
+
+    try {
+      await fs.rm(skill.location, { recursive: true, force: true });
+    } catch (e: any) {
+      console.error('强制删除 skill 文件失败:', e);
+    }
+
+    return { success: true };
   }
 
   // 获取 skills 内容用于注入 prompt

@@ -2,39 +2,275 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #0f172a;
-  color: #e2e8f0;
+/* ============================================
+   OS Manager — Multi-Theme Design System
+   5 distinctive themes, zero generic AI aesthetics
+   ============================================ */
+
+/* --- Theme 1: Midnight Operator (default) --- */
+/* Deep navy industrial terminal with warm electric accents */
+:root,
+[data-theme="midnight"] {
+  --color-bg: #0a0e1a;
+  --color-surface: #111827;
+  --color-surface-hover: #1a2332;
+  --color-border: #1e293b;
+  --color-border-hover: #334155;
+  --color-accent: #ff6b35;
+  --color-accent-dim: rgba(255, 107, 53, 0.12);
+  --color-secondary: #f7c548;
+  --color-success: #5ecf8a;
+  --color-success-dim: rgba(94, 207, 138, 0.12);
+  --color-warning: #f7c548;
+  --color-warning-dim: rgba(247, 197, 72, 0.12);
+  --color-danger: #ef4444;
+  --color-danger-dim: rgba(239, 68, 68, 0.12);
+  --color-text-primary: #f0f0f5;
+  --color-text-secondary: #a0a0b0;
+  --color-text-muted: #5a5a6a;
+  --color-text-on-accent: #ffffff;
+  --color-glow-accent: rgba(255, 107, 53, 0.15);
+  --color-overlay: rgba(0, 0, 0, 0.6);
 }
 
-/* 自定义滚动条 */
+/* --- Theme 2: Solar Architect --- */
+/* Warm daylight architect studio — paper, ochre, forest */
+[data-theme="solar"] {
+  --color-bg: #faf6f1;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f5efe8;
+  --color-border: #e8e0d4;
+  --color-border-hover: #d4c8b8;
+  --color-accent: #c25e00;
+  --color-accent-dim: rgba(194, 94, 0, 0.08);
+  --color-secondary: #2d6a4f;
+  --color-success: #2d6a4f;
+  --color-success-dim: rgba(45, 106, 79, 0.08);
+  --color-warning: #b8860b;
+  --color-warning-dim: rgba(184, 134, 11, 0.08);
+  --color-danger: #c23b22;
+  --color-danger-dim: rgba(194, 59, 34, 0.08);
+  --color-text-primary: #1a1612;
+  --color-text-secondary: #5c5348;
+  --color-text-muted: #a89e90;
+  --color-text-on-accent: #ffffff;
+  --color-glow-accent: rgba(194, 94, 0, 0.1);
+  --color-overlay: rgba(26, 22, 18, 0.4);
+}
+
+/* --- Theme 3: Neon Tokyo --- */
+/* Cyberpunk maximalist — magenta + electric cyan on deep purple-black */
+[data-theme="tokyo"] {
+  --color-bg: #0a0a12;
+  --color-surface: #12121f;
+  --color-surface-hover: #1a1a2e;
+  --color-border: #1e1e3f;
+  --color-border-hover: #2e2e5f;
+  --color-accent: #ff00a0;
+  --color-accent-dim: rgba(255, 0, 160, 0.12);
+  --color-secondary: #00f0ff;
+  --color-success: #00ff9d;
+  --color-success-dim: rgba(0, 255, 157, 0.12);
+  --color-warning: #ffcc00;
+  --color-warning-dim: rgba(255, 204, 0, 0.12);
+  --color-danger: #ff3366;
+  --color-danger-dim: rgba(255, 51, 102, 0.12);
+  --color-text-primary: #f0f0ff;
+  --color-text-secondary: #a0a0c0;
+  --color-text-muted: #606080;
+  --color-text-on-accent: #ffffff;
+  --color-glow-accent: rgba(255, 0, 160, 0.2);
+  --color-overlay: rgba(0, 0, 0, 0.7);
+}
+
+/* --- Theme 4: Paper & Ink --- */
+/* Eastern editorial — rice paper + cinnabar + ink black */
+[data-theme="paper"] {
+  --color-bg: #f5f0e8;
+  --color-surface: #faf8f3;
+  --color-surface-hover: #f0ebe2;
+  --color-border: #e0d8cc;
+  --color-border-hover: #c8bfb0;
+  --color-accent: #c23b22;
+  --color-accent-dim: rgba(194, 59, 34, 0.08);
+  --color-secondary: #1a1a1a;
+  --color-success: #4a7c59;
+  --color-success-dim: rgba(74, 124, 89, 0.08);
+  --color-warning: #b8860b;
+  --color-warning-dim: rgba(184, 134, 11, 0.08);
+  --color-danger: #c23b22;
+  --color-danger-dim: rgba(194, 59, 34, 0.08);
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #4a4a4a;
+  --color-text-muted: #9a9088;
+  --color-text-on-accent: #ffffff;
+  --color-glow-accent: rgba(194, 59, 34, 0.08);
+  --color-overlay: rgba(26, 26, 26, 0.35);
+}
+
+/* --- Theme 5: Arctic Frost --- */
+/* Cold minimal — deep navy-black + ice mint + glacier blue */
+[data-theme="arctic"] {
+  --color-bg: #0f1419;
+  --color-surface: #161f2a;
+  --color-surface-hover: #1e2a38;
+  --color-border: #1e2d3d;
+  --color-border-hover: #2e4055;
+  --color-accent: #7ee787;
+  --color-accent-dim: rgba(126, 231, 135, 0.1);
+  --color-secondary: #a5f3fc;
+  --color-success: #7ee787;
+  --color-success-dim: rgba(126, 231, 135, 0.1);
+  --color-warning: #fcd34d;
+  --color-warning-dim: rgba(252, 211, 77, 0.1);
+  --color-danger: #fca5a5;
+  --color-danger-dim: rgba(252, 165, 165, 0.1);
+  --color-text-primary: #e8f5e9;
+  --color-text-secondary: #a0c4b0;
+  --color-text-muted: #5a7a6a;
+  --color-text-on-accent: #0a1210;
+  --color-glow-accent: rgba(126, 231, 135, 0.12);
+  --color-overlay: rgba(0, 0, 0, 0.6);
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+
+html {
+  color-scheme: dark;
+}
+
+[data-theme="solar"] html,
+[data-theme="paper"] html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+/* Scrollbar — adapts to theme */
 ::-webkit-scrollbar {
   width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: var(--color-surface);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
+  background: var(--color-border-hover);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: var(--color-text-muted);
 }
 
-/* 代码块样式 */
+/* Code blocks */
 pre {
-  background: #1e293b;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   padding: 12px;
   border-radius: 8px;
   overflow-x: auto;
   font-size: 13px;
+  transition: background-color 0.4s ease, border-color 0.4s ease;
 }
 
 code {
-  font-family: 'Courier New', monospace;
-  color: #a5b4fc;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--color-text-secondary);
+}
+
+/* Selection */
+::selection {
+  background: var(--color-accent-dim);
+  color: var(--color-text-primary);
+}
+
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   Animation Keyframes
+   ============================================ */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-glow-accent); }
+  50% { box-shadow: 0 0 20px 4px var(--color-glow-accent); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+
+@layer utilities {
+  .animate-fade-in-up {
+    animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease forwards;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .glass-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    backdrop-filter: blur(12px);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.4s ease;
+  }
+
+  .glass-card:hover {
+    border-color: var(--color-border-hover);
+    box-shadow: 0 8px 32px -8px var(--color-glow-accent);
+  }
+
+  .theme-transition {
+    transition: background-color 0.4s ease,
+                border-color 0.4s ease,
+                color 0.4s ease,
+                box-shadow 0.4s ease;
+  }
 }

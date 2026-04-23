@@ -111,30 +111,44 @@ export class AgentCore {
   private skillRegistry: SkillRegistry;
 
   constructor(sessionManager: SessionManager) {
-    this.openai = new OpenAI({
-      apiKey: config.deepseek.apiKey,
-      baseURL: config.deepseek.baseURL,
-    });
     this.toolRegistry = new ToolRegistry();
     this.riskEngine = new RiskEngine();
     this.sessionManager = sessionManager;
     this.skillRegistry = new SkillRegistry();
+    this.openai = this.createOpenAI();
+  }
+
+  private createOpenAI(): OpenAI {
+    return new OpenAI({
+      apiKey: config.deepseek.apiKey,
+      baseURL: config.deepseek.baseURL,
+    });
+  }
+
+  /** 配置变更后重新初始化 */
+  reinit() {
+    this.openai = this.createOpenAI();
+    console.log('🤖 AgentCore 已重新初始化');
   }
 
   getSkillRegistry(): SkillRegistry {
     return this.skillRegistry;
   }
 
-  private buildSystemPrompt(userInput: string): string {
+  private buildSystemPrompt(userInput: string, agentConfig?: { instructions?: string; skills?: string[] }): string {
     const keywords = detectSkillKeywords(userInput);
     const skillsContent = this.skillRegistry.getSkillsContentForPrompt(keywords);
-    
-    let prompt = `你是一个专业的操作系统智能代理。你的职责是通过自然语言帮助用户管理Linux服务器。
+
+    let prompt = agentConfig?.instructions
+      ? agentConfig.instructions + '\n\n'
+      : '';
+
+    prompt += `你是一个专业的操作系统智能代理。你的职责是通过自然语言帮助用户管理Linux服务器。
 
 你可以使用以下工具来执行操作：
 - execute_command: 执行任意系统命令（适用于查询类操作）
 - get_disk_usage: 获取磁盘使用情况
-- get_memory_info: 获取内存使用情况  
+- get_memory_info: 获取内存使用情况
 - get_process_list: 获取进程列表
 - find_files: 查找文件或列出目录
 - get_network_info: 获取网络端口信息
@@ -157,6 +171,20 @@ export class AgentCore {
 
     if (skillsContent) {
       prompt += `\n\n===== 相关知识技能 =====\n${skillsContent}\n========================`;
+    }
+
+    // 注入 Agent 绑定的 skills
+    if (agentConfig?.skills && agentConfig.skills.length > 0) {
+      const boundSkillContents: string[] = [];
+      for (const skillId of agentConfig.skills) {
+        const skill = this.skillRegistry.getSkill(skillId);
+        if (skill) {
+          boundSkillContents.push(`\n==== Skill: ${skill.name} ====\n${skill.content}`);
+        }
+      }
+      if (boundSkillContents.length > 0) {
+        prompt += `\n\n===== 已绑定技能 =====\n${boundSkillContents.join('\n')}\n======================`;
+      }
     }
 
     return prompt;
@@ -271,7 +299,8 @@ export class AgentCore {
   async processMessage(
     sessionId: string,
     userInput: string,
-    onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>
+    onRiskConfirm?: (assessment: RiskAssessment) => Promise<boolean>,
+    agentConfig?: { instructions?: string; skills?: string[] }
   ): Promise<Message[]> {
     const session = this.sessionManager.getSession(sessionId);
     if (!session) {
@@ -286,7 +315,7 @@ export class AgentCore {
     };
     this.sessionManager.addMessage(sessionId, userMessage);
 
-    const systemPrompt = this.buildSystemPrompt(userInput);
+    const systemPrompt = this.buildSystemPrompt(userInput, agentConfig);
     let messages = this.buildMessages(session, systemPrompt);
     
     const maxRounds = 10;

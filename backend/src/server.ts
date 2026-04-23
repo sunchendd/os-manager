@@ -3,10 +3,12 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
-import { config } from './config';
+import { config, updateAIConfig, maskApiKey } from './config';
 import { AgentCore } from './agent/AgentCore';
 import { MockAgentCore } from './agent/MockAgentCore';
 import { SessionManager } from './agent/SessionManager';
+import { OpenCodeBridge, isOpenCodeAvailable, getOpenCodeVersion } from './agent/OpenCodeBridge';
+import { AgentManager } from './agent/AgentManager';
 
 import { SystemTools } from './tools/SystemTools';
 import { SystemDetector } from './tools/SystemDetector';
@@ -33,23 +35,63 @@ const systemDetector = new SystemDetector();
 const mirrorConfigurator = new MirrorConfigurator();
 const optimizationEngine = new OptimizationEngine();
 
-// 根据API key是否配置选择Agent
-const useRealAI = !!config.deepseek.apiKey && config.deepseek.apiKey !== 'sk-test-key-placeholder';
-const agent = useRealAI 
-  ? new AgentCore(sessionManager)
-  : new MockAgentCore(sessionManager);
+// Agent 初始化与热更新
+function isRealAIEnabled() {
+  return !!config.deepseek.apiKey && config.deepseek.apiKey !== 'sk-test-key-placeholder';
+}
 
-console.log(`🤖 AI模式: ${useRealAI ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
+function createAgent() {
+  return isRealAIEnabled()
+    ? new AgentCore(sessionManager)
+    : new MockAgentCore(sessionManager);
+}
+
+let agent = createAgent();
+const opencodeAvailable = isOpenCodeAvailable();
+const agentManager = new AgentManager();
+console.log(`🤖 AI模式: ${isRealAIEnabled() ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
+console.log(`🔌 Opencode Agent: ${opencodeAvailable ? '已安装' : '未安装'}`);
+console.log(`🎭 Agents: ${agentManager.list().length} 个已配置`);
+
+function reinitAgent() {
+  const wasReal = agent instanceof AgentCore;
+  const nowReal = isRealAIEnabled();
+  if (wasReal !== nowReal) {
+    agent = createAgent();
+    console.log(`🤖 AI模式切换: ${nowReal ? 'DeepSeek API' : '本地规则引擎（演示模式）'}`);
+  } else {
+    agent.reinit();
+  }
+}
 
 const systemTools = new SystemTools();
 
 // REST API
 app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    mode: useRealAI ? 'deepseek' : 'mock',
-    timestamp: new Date().toISOString() 
+  res.json({
+    status: 'ok',
+    mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+    opencode: opencodeAvailable,
+    timestamp: new Date().toISOString()
   });
+});
+
+// OpenCode 版本信息
+app.get('/api/opencode/version', (req, res) => {
+  const version = getOpenCodeVersion();
+  res.json({ available: opencodeAvailable, version });
+});
+
+// OpenCode 连接测试
+app.post('/api/opencode/test', (req, res) => {
+  if (!opencodeAvailable) {
+    return res.status(503).json({ success: false, error: 'Opencode CLI 未安装' });
+  }
+  const version = getOpenCodeVersion();
+  if (!version) {
+    return res.status(500).json({ success: false, error: '无法获取 Opencode 版本' });
+  }
+  res.json({ success: true, version });
 });
 
 // 系统信息
@@ -87,6 +129,59 @@ app.get('/api/processes', async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// Agent 管理 API
+app.get('/api/agents', (req, res) => {
+  res.json({ success: true, data: agentManager.list() });
+});
+
+app.get('/api/agents/:id', (req, res) => {
+  const agent = agentManager.get(req.params.id);
+  if (!agent) {
+    return res.status(404).json({ success: false, error: 'Agent 不存在' });
+  }
+  res.json({ success: true, data: agent });
+});
+
+app.post('/api/agents', (req, res) => {
+  try {
+    const { name, description, instructions, model, skills, environment } = req.body;
+    if (!name || !instructions) {
+      return res.status(400).json({ success: false, error: '名称和指令不能为空' });
+    }
+    const agent = agentManager.create({
+      name,
+      description: description || '',
+      instructions,
+      model: model || '',
+      skills: skills || [],
+      environment: environment || {},
+    });
+    res.json({ success: true, data: agent });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.put('/api/agents/:id', (req, res) => {
+  try {
+    const agent = agentManager.update(req.params.id, req.body);
+    if (!agent) {
+      return res.status(404).json({ success: false, error: 'Agent 不存在' });
+    }
+    res.json({ success: true, data: agent });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.delete('/api/agents/:id', (req, res) => {
+  const success = agentManager.delete(req.params.id);
+  if (!success) {
+    return res.status(404).json({ success: false, error: 'Agent 不存在' });
+  }
+  res.json({ success: true });
 });
 
 // 聚合仪表盘数据接口（解决加载慢问题）
@@ -227,8 +322,59 @@ app.post('/api/skills/install', async (req, res) => {
 
 app.delete('/api/skills/:id', async (req, res) => {
   try {
-    const deleted = await agent.getSkillRegistry().uninstallSkill(req.params.id);
-    res.json({ success: deleted });
+    const result = await agent.getSkillRegistry().uninstallSkill(req.params.id);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/skills/:id/force-delete', async (req, res) => {
+  try {
+    const result = await agent.getSkillRegistry().forceUninstallSkill(req.params.id);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ========== AI 配置 ==========
+app.get('/api/config/ai', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      apiKey: maskApiKey(config.deepseek.apiKey),
+      baseURL: config.deepseek.baseURL,
+      model: config.deepseek.model,
+      mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+    },
+  });
+});
+
+app.post('/api/config/ai', async (req, res) => {
+  try {
+    const { apiKey, baseURL, model } = req.body;
+    const updates: Partial<typeof config.deepseek> = {};
+
+    // 如果传入的 key 不是掩码形式（包含 •），则更新
+    if (apiKey !== undefined && !apiKey.includes('•')) {
+      updates.apiKey = apiKey.trim();
+    }
+    if (baseURL !== undefined) updates.baseURL = baseURL.trim();
+    if (model !== undefined) updates.model = model.trim();
+
+    updateAIConfig(updates);
+    reinitAgent();
+
+    res.json({
+      success: true,
+      data: {
+        apiKey: maskApiKey(config.deepseek.apiKey),
+        baseURL: config.deepseek.baseURL,
+        model: config.deepseek.model,
+        mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+      },
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -269,11 +415,16 @@ io.on('connection', (socket) => {
     socket.emit('session_created', { sessionId: session.id });
   });
 
-  socket.on('send_message', async (data: { sessionId: string; message: string }) => {
+  socket.on('send_message', async (data: { sessionId: string; message: string; agentId?: string | null }) => {
     try {
-      const { sessionId, message } = data;
-      
+      const { sessionId, message, agentId } = data;
+
       socket.emit('typing', { sessionId, typing: true });
+
+      const agentConfig = agentId ? agentManager.get(agentId) : undefined;
+      const processConfig = agentConfig
+        ? { instructions: agentConfig.instructions, skills: agentConfig.skills }
+        : undefined;
 
       const messages = await agent.processMessage(sessionId, message, async (risk) => {
         return new Promise((resolve) => {
@@ -281,17 +432,17 @@ io.on('connection', (socket) => {
             sessionId,
             risk,
           });
-          
+
           socket.once('risk_response', (data: { confirmed: boolean }) => {
             resolve(data.confirmed);
           });
-          
+
           setTimeout(() => resolve(false), 30000);
         });
-      });
+      }, processConfig);
 
       socket.emit('typing', { sessionId, typing: false });
-      
+
       for (const msg of messages) {
         if (msg.role === 'assistant') {
           socket.emit('message', {
@@ -307,9 +458,124 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Opencode Agent 流式执行
+  socket.on('send_message_opencode', async (data: { sessionId: string; message: string; agentId?: string | null }) => {
+    if (!opencodeAvailable) {
+      socket.emit('error', { message: 'Opencode Agent 未安装，请先安装 opencode CLI' });
+      return;
+    }
+
+    const { sessionId, message, agentId } = data;
+
+    // 保存用户消息到会话
+    const userMsg = {
+      id: Date.now().toString(),
+      role: 'user' as const,
+      content: message,
+      timestamp: Date.now(),
+    };
+    const session = sessionManager.getSession(sessionId);
+    if (session) {
+      sessionManager.addMessage(sessionId, userMsg);
+    }
+
+    socket.emit('typing', { sessionId, typing: true });
+    socket.emit('opencode_start', { sessionId });
+
+    const bridge = new OpenCodeBridge();
+    const executedCommands: Array<{ command: string; output: string; success: boolean; timestamp: number }> = [];
+    let finalText = '';
+
+    bridge.on('event', (evt) => {
+      socket.emit('opencode_event', { sessionId, event: evt });
+
+      if (evt.type === 'tool_result' && evt.command) {
+        executedCommands.push({
+          command: evt.command,
+          output: evt.output || '',
+          success: !evt.error,
+          timestamp: Date.now(),
+        });
+      }
+    });
+
+    // 获取 Agent 配置
+    const agentConfig = agentId ? agentManager.get(agentId) : undefined;
+
+    // 构建 instructions，注入绑定的 skills 内容
+    let effectiveInstructions = agentConfig?.instructions || '';
+    if (agentConfig?.skills && agentConfig.skills.length > 0) {
+      const skillContents: string[] = [];
+      for (const skillId of agentConfig.skills) {
+        const skill = agent.getSkillRegistry().getSkill(skillId);
+        if (skill) {
+          skillContents.push(`\n==== Skill: ${skill.name} ====\n${skill.content}`);
+        }
+      }
+      if (skillContents.length > 0) {
+        effectiveInstructions += `\n\n===== 已绑定技能 =====\n${skillContents.join('\n')}\n======================`;
+      }
+    }
+
+    const bridgeOptions = agentConfig
+      ? {
+          model: agentConfig.model || undefined,
+          instructions: effectiveInstructions || undefined,
+          environment: agentConfig.environment || undefined,
+        }
+      : undefined;
+
+    try {
+      finalText = await bridge.run(message, bridgeOptions);
+    } catch (error: any) {
+      socket.emit('opencode_event', {
+        sessionId,
+        event: { type: 'error', error: error.message || 'Opencode 执行失败' },
+      });
+      finalText = `❌ Opencode Agent 执行失败: ${error.message || '未知错误'}`;
+    }
+
+    socket.emit('typing', { sessionId, typing: false });
+    socket.emit('opencode_done', { sessionId });
+
+    // 发送最终 assistant 消息
+    const assistantMsg = {
+      id: Date.now().toString(),
+      role: 'assistant' as const,
+      content: finalText || 'Opencode Agent 已完成执行，但未返回结果。',
+      commands: executedCommands.length > 0 ? executedCommands : undefined,
+      timestamp: Date.now(),
+    };
+    if (session) {
+      sessionManager.addMessage(sessionId, assistantMsg);
+    }
+    socket.emit('message', {
+      sessionId,
+      message: assistantMsg,
+    });
+  });
+
   socket.on('clear_session', (data: { sessionId: string }) => {
     sessionManager.clearSession(data.sessionId);
     socket.emit('session_cleared', { sessionId: data.sessionId });
+  });
+
+  socket.on('list_sessions', () => {
+    const sessions = sessionManager.listSessions();
+    socket.emit('sessions_list', { sessions });
+  });
+
+  socket.on('switch_session', (data: { sessionId: string }) => {
+    const session = sessionManager.getSession(data.sessionId);
+    if (session) {
+      socket.join(data.sessionId);
+      socket.emit('session_switched', { sessionId: data.sessionId, messages: session.messages });
+    }
+  });
+
+  socket.on('delete_session', (data: { sessionId: string }) => {
+    const deleted = sessionManager.deleteSession(data.sessionId);
+    socket.emit('session_deleted', { sessionId: data.sessionId, success: deleted });
   });
 
   socket.on('disconnect', () => {
