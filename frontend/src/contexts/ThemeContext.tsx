@@ -69,19 +69,28 @@ const ThemeContext = createContext<ThemeContextType>({
   themes: THEMES,
 });
 
+function getSystemTheme(): ThemeId {
+  if (typeof window === 'undefined') return 'midnight';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'midnight' : 'solar';
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [isAuto, setIsAutoState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(AUTO_KEY);
+      // 从未设置过，默认跟随系统
+      if (saved === null) return true;
+      return saved === 'true';
+    } catch { return true; }
+  });
+
   const [theme, setThemeState] = useState<ThemeId>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY) as ThemeId;
       if (saved && THEMES.find(t => t.id === saved)) return saved;
     } catch { /* ignore */ }
-    return 'midnight';
-  });
-
-  const [isAuto, setIsAutoState] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(AUTO_KEY) === 'true';
-    } catch { return false; }
+    // 首次加载，跟随系统偏好
+    return getSystemTheme();
   });
 
   // Apply theme to document
@@ -109,8 +118,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const setTheme = useCallback((newTheme: ThemeId) => {
     setThemeState(newTheme);
+    setIsAutoState(false); // 手动选择主题时，自动关闭跟随系统
     try {
       localStorage.setItem(STORAGE_KEY, newTheme);
+      localStorage.setItem(AUTO_KEY, 'false');
     } catch { /* ignore */ }
   }, []);
 
@@ -119,6 +130,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(AUTO_KEY, auto ? 'true' : 'false');
     } catch { /* ignore */ }
+    if (auto) {
+      setThemeState(getSystemTheme());
+    }
   }, []);
 
   const cycleTheme = useCallback(() => {

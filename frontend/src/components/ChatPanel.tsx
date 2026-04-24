@@ -32,6 +32,7 @@ interface ChatPanelProps {
   agents: AgentConfig[];
   activeAgentId: string | null;
   onSelectAgent: (agentId: string | null) => void;
+  onNavigateToAgents?: () => void;
 }
 
 const TTS_KEY = 'os-manager-tts-enabled';
@@ -83,6 +84,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
   agents,
   activeAgentId,
   onSelectAgent,
+  onNavigateToAgents,
 }) => {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -518,22 +520,28 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             )}
 
             {/* Agent 选择器 */}
-            {agents.length > 0 && (
-              <div className="relative">
-                <select
-                  value={activeAgentId || ''}
-                  onChange={(e) => onSelectAgent(e.target.value || null)}
-                  className="appearance-none bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl pl-3 pr-8 py-3 text-xs font-medium text-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)]/50 cursor-pointer"
-                  title="选择 AI 员工"
-                >
-                  <option value="">默认员工</option>
-                  {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>{agent.name}</option>
-                  ))}
-                </select>
-                <Terminal className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--color-text-muted)] pointer-events-none" />
-              </div>
-            )}
+            <div className="relative">
+              <select
+                value={activeAgentId || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__manage__') {
+                    onNavigateToAgents?.();
+                  } else {
+                    onSelectAgent(val || null);
+                  }
+                }}
+                className="appearance-none bg-[var(--color-bg)] border border-[var(--color-border)] rounded-xl pl-3 pr-8 py-3 text-xs font-medium text-[var(--color-text-secondary)] focus:outline-none focus:border-[var(--color-accent)]/50 cursor-pointer"
+                title="选择 AI 员工"
+              >
+                <option value="">默认员工</option>
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>{agent.name}</option>
+                ))}
+                <option value="__manage__" style={{ fontWeight: 'bold' }}>➕ 管理员工...</option>
+              </select>
+              <Terminal className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-[var(--color-text-muted)] pointer-events-none" />
+            </div>
 
             <div className="flex-1 relative">
               <input

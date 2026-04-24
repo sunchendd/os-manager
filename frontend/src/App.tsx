@@ -533,6 +533,7 @@ function App() {
               agents={agents}
               activeAgentId={activeAgentId}
               onSelectAgent={setActiveAgentId}
+              onNavigateToAgents={() => setActivePanel('agents')}
             />
           )}
           {activePanel === 'dashboard' && <SystemDashboard socket={socket} />}
