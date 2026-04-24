@@ -6,6 +6,7 @@ import type { SessionManager } from '../agent/SessionManager';
 import type { AgentCore } from '../agent/AgentCore';
 import type { MockAgentCore } from '../agent/MockAgentCore';
 import type { AgentManager } from '../agent/AgentManager';
+import { OpenCodeBridge, isOpenCodeAvailable } from '../agent/OpenCodeBridge';
 
 export class TaskScheduler {
   private store = new TaskStore();
@@ -160,16 +161,45 @@ export class TaskScheduler {
         ? { instructions: agentConfig.instructions, skills: agentConfig.skills }
         : undefined;
 
-      const messages = await this.agent.processMessage(
-        session.id,
-        task.prompt,
-        async () => true, // 无人值守，自动确认所有风险
-        processConfig
-      );
+      // 优先使用 OpenCode（如果已安装），否则使用本地规则引擎
+      if (isOpenCodeAvailable()) {
+        const bridge = new OpenCodeBridge();
+        const executedCommands: any[] = [];
 
-      const assistantMsg = messages.find(m => m.role === 'assistant');
-      output = assistantMsg?.content || '无回复';
-      success = true;
+        let finalText = '';
+        bridge.on('event', (evt: any) => {
+          if (evt.type === 'tool_result' && evt.command) {
+            executedCommands.push({
+              command: evt.command,
+              output: evt.output || '',
+              success: !evt.error,
+              timestamp: Date.now(),
+            });
+          }
+          if (evt.type === 'text') {
+            finalText = evt.text || '';
+          }
+        });
+
+        const bridgeOptions = agentConfig
+          ? { model: agentConfig.model || undefined, instructions: processConfig?.instructions || undefined }
+          : undefined;
+
+        finalText = await bridge.run(task.prompt, bridgeOptions);
+        output = finalText || '执行完成';
+        success = true;
+      } else {
+        // Fallback：使用本地规则引擎
+        const messages = await this.agent.processMessage(
+          session.id,
+          task.prompt,
+          async () => true,
+          processConfig
+        );
+        const assistantMsg = messages.find(m => m.role === 'assistant');
+        output = assistantMsg?.content || '无回复';
+        success = true;
+      }
     } catch (e: any) {
       output = `执行失败: ${e.message || '未知错误'}`;
       success = false;

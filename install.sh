@@ -232,6 +232,7 @@ RestartSec=5
 StandardOutput=append:/var/log/os-manager.log
 StandardError=append:/var/log/os-manager.log
 Environment=NODE_ENV=production
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin"
 
 [Install]
 WantedBy=multi-user.target

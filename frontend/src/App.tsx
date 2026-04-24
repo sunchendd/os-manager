@@ -11,11 +11,13 @@ import { ServicesPanel } from './components/ServicesPanel';
 import { ThemeSwitcher } from './components/ThemeSwitcher';
 import { AgentPanel } from './components/AgentPanel';
 import { ScheduledTasksPanel } from './components/ScheduledTasksPanel';
+import { LoginPage } from './components/LoginPage';
 import {
-  Server, Terminal, Settings, Zap, Puzzle, Layers, Bot, Clock
+  Server, Terminal, Settings, Zap, Puzzle, Layers, Bot, Clock, LogOut
 } from 'lucide-react';
 
 const ACTIVE_SESSION_KEY = 'os-manager-active-session';
+const AUTH_TOKEN_KEY = 'os-manager-token';
 
 export interface OpenCodeEvent {
   type: 'thinking' | 'tool_call' | 'tool_result' | 'text' | 'done' | 'error';
@@ -40,6 +42,12 @@ function App() {
   }>({ show: false, assessment: null });
   const [activePanel, setActivePanel] = useState<'chat' | 'dashboard' | 'system' | 'optimize' | 'skills' | 'services' | 'agents' | 'scheduled'>('chat');
 
+  // 认证状态
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    try { return localStorage.getItem(AUTH_TOKEN_KEY); } catch { return null; }
+  });
+  const [authLoading, setAuthLoading] = useState(true);
+
   // Opencode 状态
   const [opencodeAvailable, setOpencodeAvailable] = useState(false);
   const [opencodeStreams, setOpencodeStreams] = useState<Record<string, OpenCodeEvent[]>>({});
@@ -63,8 +71,56 @@ function App() {
   const isTyping = chatState.activeSessionId ? !!typingSessions[chatState.activeSessionId] : false;
   const activeStream = chatState.activeSessionId ? opencodeStreams[chatState.activeSessionId] || [] : [];
 
+  // 认证检查
   useEffect(() => {
-    const newSocket = io(window.location.origin);
+    const checkAuth = async () => {
+      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!token) {
+        setAuthLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch('/api/auth/check', {
+          headers: { 'x-auth-token': token },
+        });
+        const data = await res.json();
+        if (data.authenticated) {
+          setAuthToken(token);
+        } else {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          setAuthToken(null);
+        }
+      } catch {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        setAuthToken(null);
+      }
+      setAuthLoading(false);
+    };
+    checkAuth();
+  }, []);
+
+  // 全局 fetch 拦截：自动添加认证头
+  useEffect(() => {
+    if (!authToken) return;
+    const originalFetch = window.fetch;
+    window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
+      const newInit = init || {};
+      const headers = new Headers(newInit.headers || {});
+      if (!headers.has('x-auth-token') && authToken) {
+        headers.set('x-auth-token', authToken);
+      }
+      return originalFetch(input, { ...newInit, headers });
+    };
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, [authToken]);
+
+  useEffect(() => {
+    if (!authToken) return;
+    const newSocket = io(window.location.origin, {
+      extraHeaders: { 'x-auth-token': authToken },
+    });
     setSocket(newSocket);
 
     newSocket.on('connect', () => {
@@ -363,6 +419,35 @@ function App() {
     agents: { title: 'AI 员工', subtitle: '自定义 AI 员工角色' },
   };
 
+  // 登录回调
+  const handleLogin = useCallback((token: string) => {
+    setAuthToken(token);
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  }, []);
+
+  // 登出
+  const handleLogout = useCallback(() => {
+    if (authToken) {
+      fetch('/api/auth/logout', { method: 'POST' });
+    }
+    setAuthToken(null);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(ACTIVE_SESSION_KEY);
+    window.location.reload();
+  }, [authToken]);
+
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen" style={{ backgroundColor: 'var(--color-bg)' }}>
+        <div className="text-sm" style={{ color: 'var(--color-text-muted)' }}>加载中...</div>
+      </div>
+    );
+  }
+
+  if (!authToken) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
   return (
     <div className="flex h-screen theme-transition" style={{ backgroundColor: 'var(--color-bg)' }}>
       {/* 侧边栏 */}
@@ -414,6 +499,15 @@ function App() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeSwitcher />
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-[var(--color-bg)]"
+              style={{ color: 'var(--color-text-muted)' }}
+              title="退出登录"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              退出
+            </button>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full animate-pulse"
                    style={{ backgroundColor: 'var(--color-success)' }} />

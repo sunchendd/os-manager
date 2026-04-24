@@ -173,28 +173,80 @@ export class OpenCodeBridge extends EventEmitter {
   }
 }
 
-/** 检查系统是否安装了 opencode CLI */
-export function isOpenCodeAvailable(): boolean {
+/** 构建包含常见 npm/opencode 全局路径的 PATH */
+function getExtendedPath(): string {
+  const basePaths = [
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/local/sbin',
+    '/usr/sbin',
+    '/sbin',
+    '/opt/node/bin',
+    '/usr/local/node/bin',
+    '/root/.opencode/bin',
+    `${process.env.HOME || '/root'}/.opencode/bin`,
+  ];
+  // 尝试获取用户 home 目录下的 npm 全局路径
   try {
     const { execSync } = require('child_process');
-    execSync('which opencode', { stdio: 'ignore' });
+    const globalPath = execSync('npm prefix -g 2>/dev/null', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+      timeout: 3000,
+    }).trim();
+    if (globalPath) {
+      basePaths.push(`${globalPath}/bin`);
+    }
+  } catch { /* ignore */ }
+  return basePaths.join(':') + ':' + (process.env.PATH || '');
+}
+
+const EXTENDED_PATH = getExtendedPath();
+
+/** 检查系统是否安装了 opencode CLI（兼容 systemd 环境） */
+export function isOpenCodeAvailable(): boolean {
+  const { execSync } = require('child_process');
+  try {
+    execSync('which opencode', { stdio: 'ignore', env: { ...process.env, PATH: EXTENDED_PATH } });
     return true;
   } catch {
-    return false;
+    // fallback: 尝试 npx 方式
+    try {
+      execSync('npx --yes @opencode/cli --version', {
+        stdio: 'ignore',
+        env: { ...process.env, PATH: EXTENDED_PATH },
+        timeout: 10000,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
 /** 获取 opencode CLI 版本号 */
 export function getOpenCodeVersion(): string | null {
+  const { execSync } = require('child_process');
   try {
-    const { execSync } = require('child_process');
     const version = execSync('opencode --version', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'ignore'],
       timeout: 5000,
+      env: { ...process.env, PATH: EXTENDED_PATH },
     }).trim();
     return version || null;
   } catch {
-    return null;
+    try {
+      const version = execSync('npx --yes @opencode/cli --version', {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'ignore'],
+        timeout: 10000,
+        env: { ...process.env, PATH: EXTENDED_PATH },
+      }).trim();
+      return version || null;
+    } catch {
+      return null;
+    }
   }
 }

@@ -16,6 +16,7 @@ import { MirrorConfigurator } from './tools/MirrorConfigurator';
 import { OptimizationEngine } from './tools/OptimizationEngine';
 import { TaskScheduler } from './scheduler/TaskScheduler';
 import { validate as validateCron } from 'node-cron';
+import { AuthManager, generateToken, verifyToken } from './auth/AuthManager';
 
 const app = express();
 const httpServer = createServer(app);
@@ -29,8 +30,52 @@ const io = new Server(httpServer, {
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// 静态文件服务
+// ========== 认证系统 ==========
+const authManager = new AuthManager();
+const activeTokens = new Set<string>();
+
+// 认证中间件
+function authMiddleware(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const publicPaths = ['/auth/login', '/health', '/opencode/version', '/opencode/test'];
+  if (publicPaths.includes(req.path)) {
+    return next();
+  }
+
+  const token = req.headers['x-auth-token'] as string;
+  if (!token || !verifyToken(token, activeTokens)) {
+    return res.status(401).json({ success: false, error: '未登录或登录已过期' });
+  }
+  next();
+}
+
+// 静态文件服务（登录页面前端资源不拦截）
 app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+
+// ========== 公开 API（无需认证） ==========
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    mode: isRealAIEnabled() ? 'deepseek' : 'mock',
+    opencode: opencodeAvailable,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/api/auth/login', (req, res) => {
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ success: false, error: '密码不能为空' });
+  }
+  if (authManager.verifyPassword(password)) {
+    const token = generateToken();
+    activeTokens.add(token);
+    return res.json({ success: true, token });
+  }
+  res.status(401).json({ success: false, error: '密码错误' });
+});
+
+// API 路由启用认证（以下所有 /api 路由都需要登录）
+app.use('/api', authMiddleware);
 
 const sessionManager = new SessionManager();
 const systemDetector = new SystemDetector();
@@ -72,14 +117,37 @@ taskScheduler.start();
 
 const systemTools = new SystemTools();
 
-// REST API
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    mode: isRealAIEnabled() ? 'deepseek' : 'mock',
-    opencode: opencodeAvailable,
-    timestamp: new Date().toISOString()
-  });
+// REST API（以下路由均已通过 authMiddleware 认证）
+
+// ========== 认证 API ==========
+app.post('/api/auth/logout', (req, res) => {
+  const token = req.headers['x-auth-token'] as string;
+  if (token) {
+    activeTokens.delete(token);
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/auth/check', (req, res) => {
+  const token = req.headers['x-auth-token'] as string;
+  if (token && verifyToken(token, activeTokens)) {
+    res.json({ success: true, authenticated: true });
+  } else {
+    res.json({ success: true, authenticated: false });
+  }
+});
+
+app.post('/api/auth/change-password', (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ success: false, error: '原密码和新密码不能为空' });
+  }
+  const result = authManager.changePassword(oldPassword, newPassword);
+  if (result.success) {
+    // 修改成功后清除所有 token，强制重新登录
+    activeTokens.clear();
+  }
+  res.json(result);
 });
 
 // OpenCode 版本信息

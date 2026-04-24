@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Cpu, Globe, Package, Terminal, CheckCircle, AlertCircle,
-  RefreshCw, Copy, ExternalLink
+  RefreshCw, Copy, ExternalLink, Lock, KeyRound, Eye, EyeOff
 } from 'lucide-react';
 
 interface OSInfo {
@@ -42,6 +42,12 @@ export const SystemInfoPanel: React.FC = () => {
   const [testingOpencode, setTestingOpencode] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // 修改密码状态
+  const [pwdForm, setPwdForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwdShow, setPwdShow] = useState({ old: false, new: false, confirm: false });
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdResult, setPwdResult] = useState<{ success: boolean; msg: string } | null>(null);
 
   const fetchData = async () => {
     try {
@@ -116,6 +122,45 @@ export const SystemInfoPanel: React.FC = () => {
       setCopied(false);
       setTestResult(null);
     }, 3000);
+  };
+
+  const handleChangePassword = async () => {
+    if (!pwdForm.oldPassword || !pwdForm.newPassword) {
+      setPwdResult({ success: false, msg: '请填写完整' });
+      return;
+    }
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) {
+      setPwdResult({ success: false, msg: '两次输入的新密码不一致' });
+      return;
+    }
+    if (pwdForm.newPassword.length < 4) {
+      setPwdResult({ success: false, msg: '新密码长度不能少于4位' });
+      return;
+    }
+    setPwdLoading(true);
+    setPwdResult(null);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPwdResult({ success: true, msg: '密码修改成功，请使用新密码重新登录' });
+        setPwdForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+        setTimeout(() => {
+          localStorage.removeItem('os-manager-token');
+          window.location.reload();
+        }, 2000);
+      } else {
+        setPwdResult({ success: false, msg: data.error || '修改失败' });
+      }
+    } catch (e: any) {
+      setPwdResult({ success: false, msg: '网络错误: ' + e.message });
+    } finally {
+      setPwdLoading(false);
+    }
   };
 
   if (loading) {
@@ -304,6 +349,67 @@ export const SystemInfoPanel: React.FC = () => {
             {result}
           </div>
         )}
+      </div>
+
+      {/* 修改密码 */}
+      <div className="rounded-xl p-4 border theme-transition glass-card">
+        <h3 className="text-sm font-medium mb-3 flex items-center gap-2" style={{ color: 'var(--color-text-secondary)' }}>
+          <KeyRound className="w-4 h-4" style={{ color: 'var(--color-accent)' }} />
+          修改访问密码
+        </h3>
+        <div className="space-y-3">
+          {[
+            { key: 'oldPassword' as const, label: '原密码', showKey: 'old' as const },
+            { key: 'newPassword' as const, label: '新密码', showKey: 'new' as const },
+            { key: 'confirmPassword' as const, label: '确认新密码', showKey: 'confirm' as const },
+          ].map(({ key, label, showKey }) => (
+            <div key={key}>
+              <label className="text-xs mb-1 block" style={{ color: 'var(--color-text-muted)' }}>{label}</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
+                <input
+                  type={pwdShow[showKey] ? 'text' : 'password'}
+                  value={pwdForm[key]}
+                  onChange={e => setPwdForm(prev => ({ ...prev, [key]: e.target.value }))}
+                  className="w-full rounded-lg pl-10 pr-10 py-2.5 text-sm theme-transition"
+                  style={{ backgroundColor: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-text-primary)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setPwdShow(prev => ({ ...prev, [showKey]: !prev[showKey] }))}
+                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  {pwdShow[showKey] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {pwdResult && (
+            <div className="px-3 py-2 rounded-lg text-xs font-medium"
+                 style={{
+                   backgroundColor: pwdResult.success ? 'var(--color-success-dim)' : 'var(--color-danger-dim)',
+                   color: pwdResult.success ? 'var(--color-success)' : 'var(--color-danger)',
+                 }}>
+              {pwdResult.msg}
+            </div>
+          )}
+
+          <button
+            onClick={handleChangePassword}
+            disabled={pwdLoading}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all disabled:opacity-50"
+            style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-text-on-accent)' }}
+          >
+            {pwdLoading ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <KeyRound className="w-4 h-4" />
+            )}
+            {pwdLoading ? '修改中...' : '确认修改'}
+          </button>
+        </div>
       </div>
     </div>
   );
