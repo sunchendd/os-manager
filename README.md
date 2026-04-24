@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" />
   <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-  <img src="https://img.shields.io/badge/DeepSeek-AI-FF6B6B?style=flat-square" />
+  <img src="https://img.shields.io/badge/OpenCode-Agent-FF6B6B?style=flat-square" />
   <img src="https://img.shields.io/badge/Socket.io-realtime-010101?style=flat-square&logo=socketdotio&logoColor=white" />
   <img src="https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square" />
 </p>
@@ -54,14 +54,76 @@ Unlike traditional server dashboards, OS Manager doesn't just display metrics. I
 
 ---
 
+## Supported Platforms
+
+| OS Family | Distributions |
+|-----------|--------------|
+| **Debian/Ubuntu** | Ubuntu 20.04+, Debian 11+ |
+| **RHEL/CentOS** | CentOS 7/8, RHEL 8/9, AlmaLinux, Rocky Linux |
+| **Fedora** | Fedora 36+ |
+| **openEuler** | openEuler 20.03+ |
+| **Others** | Any Linux with systemd and Node.js 22+ |
+
+**Architecture:** x86_64 / AMD64 (ARM64 support planned)
+
+---
+
 ## Quick Start
 
 ### Prerequisites
-- Node.js 22+
-- A Linux server (Ubuntu / CentOS / Debian / Fedora)
-- DeepSeek API key (or compatible OpenAI-style endpoint)
+- A Linux server (Ubuntu / CentOS / Debian / Fedora / openEuler)
+- Root or sudo access
+- OpenCode CLI (installs automatically with the script)
 
-### Installation
+---
+
+### Option 1: One-Click Script (Recommended)
+
+The fastest way to deploy on any supported Linux distribution:
+
+```bash
+# Download and run the install script
+curl -fsSL https://raw.githubusercontent.com/yourusername/os-manager/main/install.sh | sudo bash
+```
+
+The script will automatically:
+- Detect your Linux distribution (Ubuntu, Debian, CentOS, RHEL, Fedora, openEuler, AlmaLinux, Rocky Linux)
+- Install Node.js 22+ if not present
+- Install system dependencies (git, curl, build tools)
+- Install OpenCode CLI for advanced agent features
+- Build the project
+- Configure systemd service for auto-start
+
+**After installation, configure OpenCode:**
+```bash
+opencode config set api_key=your_key_here
+sudo systemctl restart os-manager
+```
+
+---
+
+### Option 2: Docker Deployment
+
+For isolated, portable deployment:
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/os-manager.git
+cd os-manager
+
+# Configure environment
+cp .env.example .env
+# Edit .env if needed
+
+# Start with Docker Compose
+docker-compose up -d
+```
+
+---
+
+### Option 3: Manual Installation
+
+For development or custom setups:
 
 ```bash
 # Clone
@@ -72,19 +134,54 @@ cd os-manager
 npm install
 
 # Configure environment
-cp backend/.env.example backend/.env
-# Edit backend/.env with your API keys
+cp .env.example .env
+# Edit .env if needed (OpenCode config is done via CLI)
 
-# Start backend
-cd backend
-npx tsx watch src/server.ts
+# Build frontend
+cd frontend && npm install && npm run build && cd ..
 
-# In another terminal, start frontend
-cd frontend
-npm run dev
+# Build backend
+cd backend && npm install && npx tsc && cd ..
+
+# Start production server
+node backend/dist/server.js
 ```
 
-Open `http://localhost:3002` and start talking to your server. 🎉
+---
+
+### Post-Deployment Configuration
+
+⚠️ **Configure OpenCode before using AI features:**
+
+1. Get your OpenCode API key: [opencode.ai](https://opencode.ai)
+2. Configure the CLI:
+   ```bash
+   opencode config set api_key=your_key_here
+   ```
+3. Restart the service:
+   ```bash
+   # For systemd installation
+   sudo systemctl restart os-manager
+   
+   # For Docker
+   docker-compose restart
+   ```
+
+4. Open `http://your-server-ip:3002` and start managing your server with AI! 🎉
+
+### Verify Installation
+
+Run the verification script to check your deployment:
+
+```bash
+# If installed via script
+sudo /opt/os-manager/check.sh
+
+# If manual/Docker
+bash check.sh
+```
+
+This checks: Node.js version, service status, API key config, port binding, OpenCode CLI, and HTTP health.
 
 ---
 
@@ -171,7 +268,7 @@ Open `http://localhost:3002` and start talking to your server. 🎉
 └──────────────┘     └──────┬───────┘     │    agents, tasks)│
                             │             └──────────────────┘
                      ┌──────┴───────┐
-                     │  DeepSeek    │
+                      │  OpenCode    │
                      │  AI Engine   │
                      └──────────────┘
 ```
@@ -180,7 +277,7 @@ Open `http://localhost:3002` and start talking to your server. 🎉
 |-------|-----------|
 | **Frontend** | React 19 + TypeScript + Tailwind CSS |
 | **Backend** | Node.js + Express + TypeScript + Socket.io |
-| **AI Engine** | DeepSeek API (OpenAI-compatible) |
+| **AI Engine** | OpenCode CLI |
 | **Scheduling** | node-cron |
 | **Persistence** | JSON file storage (zero-config) |
 | **Voice** | Web Speech API + TTS |

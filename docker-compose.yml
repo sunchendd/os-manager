@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  os-manager:
+    build: .
+    container_name: os-manager
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-chat}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3002}
+    volumes:
+      - ./data:/app/backend/data
+      - ./.env:/app/.env
+    networks:
+      - os-manager-net
+
+networks:
+  os-manager-net:
+    driver: bridge

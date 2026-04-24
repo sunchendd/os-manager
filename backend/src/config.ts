@@ -28,6 +28,5 @@ export function maskApiKey(key: string): string {
   return key.slice(0, 4) + '••••••••' + key.slice(-4);
 }
 
-if (!config.deepseek.apiKey) {
-  console.warn('警告: DEEPSEEK_API_KEY 未设置，AI功能将无法使用');
-}
+// Note: DeepSeek is optional. OpenCode CLI is the recommended AI backend.
+// If neither DeepSeek nor OpenCode is configured, the system falls back to mock mode.

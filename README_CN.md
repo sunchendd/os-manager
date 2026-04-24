@@ -2,7 +2,7 @@
   <img src="https://img.shields.io/badge/Node.js-22+-339933?style=flat-square&logo=nodedotjs&logoColor=white" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white" />
   <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-  <img src="https://img.shields.io/badge/DeepSeek-AI-FF6B6B?style=flat-square" />
+  <img src="https://img.shields.io/badge/OpenCode-Agent-FF6B6B?style=flat-square" />
   <img src="https://img.shields.io/badge/Socket.io-实时推送-010101?style=flat-square&logo=socketdotio&logoColor=white" />
   <img src="https://img.shields.io/badge/许可证-MIT-brightgreen?style=flat-square" />
 </p>
@@ -54,37 +54,135 @@ OS Manager 把 AI 变成你的 7×24 小时 Linux 运维工程师。不用再背
 
 ---
 
+## 支持的平台
+
+| 系统家族 | 具体发行版 |
+|----------|-----------|
+| **Debian/Ubuntu** | Ubuntu 20.04+、Debian 11+ |
+| **RHEL/CentOS** | CentOS 7/8、RHEL 8/9、AlmaLinux、Rocky Linux |
+| **Fedora** | Fedora 36+ |
+| **openEuler** | openEuler 20.03+、Anolis OS、openCloudOS |
+| **国产系统** | 麒麟 Kylin、统信 UOS、龙蜥 Anolis |
+| **其他** | 任何支持 systemd 和 Node.js 22+ 的 Linux |
+
+**架构支持：** x86_64 / AMD64（ARM64 适配中）
+
+---
+
 ## 快速开始
 
 ### 环境要求
-- Node.js 22+
-- 一台 Linux 服务器（Ubuntu / CentOS / Debian / Fedora 都行）
-- DeepSeek API Key（或兼容 OpenAI 格式的端点）
+- 一台 Linux 服务器（Ubuntu / CentOS / Debian / Fedora / openEuler / 龙蜥 / 麒麟等）
+- root 或 sudo 权限
+- OpenCode CLI（脚本会自动安装）
 
-### 安装步骤
+---
+
+### 方式一：一键脚本部署（推荐）
+
+支持所有主流 Linux 发行版的一键部署：
+
+```bash
+# 下载并执行安装脚本
+curl -fsSL https://raw.githubusercontent.com/yourusername/os-manager/main/install.sh | sudo bash
+```
+
+脚本会自动完成：
+- 检测系统发行版（Ubuntu、Debian、CentOS、RHEL、Fedora、openEuler、Anolis、Kylin 等）
+- 安装 Node.js 22+（如未安装）
+- 安装系统依赖（git、curl、构建工具等）
+- 安装 OpenCode CLI（高级 Agent 功能）
+- 构建前后端项目
+- 配置 systemd 自启动服务
+
+**部署完成后，配置 OpenCode 才能使用 AI 功能：**
+```bash
+opencode config set api_key=你的密钥
+sudo systemctl restart os-manager
+```
+
+---
+
+### 方式二：Docker 部署
+
+适合需要隔离环境或快速迁移的场景：
 
 ```bash
 # 克隆仓库
 git clone https://github.com/yourusername/os-manager.git
 cd os-manager
 
-# 装依赖
-npm install
-
 # 配置环境变量
-cp backend/.env.example backend/.env
-# 编辑 backend/.env 填入你的 API Key
+cp .env.example .env
+# 编辑 .env 如有需要
 
-# 启动后端
-cd backend
-npx tsx watch src/server.ts
-
-# 另开终端，启动前端
-cd frontend
-npm run dev
+# 启动服务
+docker-compose up -d
 ```
 
-浏览器打开 `http://localhost:3002`，开始跟服务器唠嗑吧！🎉
+---
+
+### 方式三：手动安装
+
+适合开发环境或自定义部署：
+
+```bash
+# 克隆仓库
+git clone https://github.com/yourusername/os-manager.git
+cd os-manager
+
+# 安装依赖
+npm install
+
+# 配置环境变量（重要！）
+cp .env.example .env
+# 编辑 .env 填入你的 OpenCode API Key
+
+# 构建前端
+cd frontend && npm install && npm run build && cd ..
+
+# 构建后端
+cd backend && npm install && npx tsc && cd ..
+
+# 启动生产环境服务
+node backend/dist/server.js
+```
+
+---
+
+### 部署后配置
+
+⚠️ **使用 AI 功能前必须配置 OpenCode：**
+
+1. 获取 OpenCode API Key：[opencode.ai](https://opencode.ai)
+2. 配置 CLI：
+   ```bash
+   opencode config set api_key=你的密钥
+   ```
+3. 重启服务生效：
+   ```bash
+   # systemd 安装方式
+   sudo systemctl restart os-manager
+   
+   # Docker 方式
+   docker-compose restart
+   ```
+
+4. 浏览器访问 `http://你的服务器IP:3002`，开始 AI 管理服务器之旅！🎉
+
+### 验证安装
+
+运行验证脚本检查部署状态：
+
+```bash
+# 一键脚本安装
+sudo /opt/os-manager/check.sh
+
+# 手动/Docker 安装
+bash check.sh
+```
+
+验证项包括：Node.js 版本、服务状态、API Key 配置、端口监听、OpenCode CLI、HTTP 健康检查。
 
 ---
 
@@ -171,7 +269,7 @@ npm run dev
 └──────────────┘     └──────┬───────┘     │    任务)         │
                             │             └──────────────────┘
                      ┌──────┴───────┐
-                     │  DeepSeek    │
+                      │  OpenCode    │
                      │  AI 引擎     │
                      └──────────────┘
 ```
@@ -180,7 +278,7 @@ npm run dev
 |------|------|
 | **前端** | React 19 + TypeScript + Tailwind CSS |
 | **后端** | Node.js + Express + TypeScript + Socket.io |
-| **AI 引擎** | DeepSeek API（兼容 OpenAI 格式） |
+| **AI 引擎** | OpenCode CLI |
 | **定时调度** | node-cron |
 | **数据持久化** | JSON 文件存储（零配置） |
 | **语音** | Web Speech API + TTS |
