@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://s26.fnnas.net/s/961d3b8a4ab04ef7a4" target="_blank"><b>▶ 观看演示视频</b></a>
+  <a href="https://www.bilibili.com/video/BV1syoSBRE7J/" target="_blank"><b>▶ 观看演示视频</b></a>
 </p>
 
 ---
