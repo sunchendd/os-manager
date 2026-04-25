@@ -24,6 +24,10 @@
   <a href="#-架构">架构</a>
 </p>
 
+<p align="center">
+  <a href="https://s26.fnnas.net/s/961d3b8a4ab04ef7a4" target="_blank"><b>▶ 观看演示视频</b></a>
+</p>
+
 ---
 
 ## OS Manager 是什么？
